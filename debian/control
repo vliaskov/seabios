@@ -1,0 +1,17 @@
+Source: seabios
+Section: misc
+Priority: extra
+Maintainer: Aurelien Jarno <aurel32@debian.org>
+Build-Depends: debhelper (>= 5), iasl
+Standards-Version: 3.8.3
+
+Package: seabios
+Architecture: all
+Depends: ${misc:Depends}
+Description: Legacy BIOS implementation
+ SeaBIOS is a legacy BIOS implementation, aimed at supporting not only
+ emulated hosts such as QEMU, but also real hardware.
+ .
+ Note, however, that SeaBIOS does not handle early initialization of core
+ chipsets, so don't even think of flashing it to your board (look at
+ Coreboot for that).

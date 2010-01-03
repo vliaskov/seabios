@@ -1,0 +1,6 @@
+seabios (0.5.0-1) UNRELEASED; urgency=low
+
+  [ Aurelien Jarno ]
+  * Initial release (Closes: #492935).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sun, 03 Jan 2010 21:25:34 +0100
