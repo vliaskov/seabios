@@ -669,7 +669,7 @@ handle_101007(struct bregs *regs)
 static void
 handle_101008(struct bregs *regs)
 {
-    regs->bh = vgahw_get_overscan_border_color(regs);
+    regs->bh = vgahw_get_overscan_border_color();
 }
 
 static void
@@ -833,15 +833,15 @@ handle_101130(struct bregs *regs)
 {
     switch (regs->bh) {
     case 0x00: {
-        u32 segoff = GET_IVT(0x1f).segoff;
-        regs->es = segoff >> 16;
-        regs->bp = segoff;
+        struct segoff_s so = GET_IVT(0x1f);
+        regs->es = so.seg;
+        regs->bp = so.offset;
         break;
     }
     case 0x01: {
-        u32 segoff = GET_IVT(0x43).segoff;
-        regs->es = segoff >> 16;
-        regs->bp = segoff;
+        struct segoff_s so = GET_IVT(0x43);
+        regs->es = so.seg;
+        regs->bp = so.offset;
         break;
     }
     case 0x02:
@@ -1330,7 +1330,7 @@ handle_10(struct bregs *regs)
  ****************************************************************/
 
 static void
-init_bios_area()
+init_bios_area(void)
 {
     // init detected hardware BIOS Area
     // set 80x25 color (not clear from RBIL but usual)

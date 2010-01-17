@@ -232,13 +232,13 @@ struct extended_bios_data_area_s {
     FLATPTR_TO_SEG(BUILD_LOWRAM_END - EBDA_SIZE_START*1024)
 
 // Accessor functions
-static inline u16 get_ebda_seg() {
+static inline u16 get_ebda_seg(void) {
     return GET_BDA(ebda_seg);
 }
 static inline struct extended_bios_data_area_s *
-get_ebda_ptr()
+get_ebda_ptr(void)
 {
-    ASSERT32();
+    ASSERT32FLAT();
     return MAKE_FLATPTR(get_ebda_seg(), 0);
 }
 #define GET_EBDA2(eseg, var)                                            \
@@ -260,17 +260,36 @@ get_ebda_ptr()
  * Global variables
  ****************************************************************/
 
+#if MODE16 == 0 && MODESEGMENT == 1
+// In 32bit segmented mode %cs may not be readable and the code may be
+// relocated.  The entry code sets up %gs with a readable segment and
+// the code offset can be determined by get_global_offset().
+#define GLOBAL_SEGREG GS
+static inline u32 __attribute_const get_global_offset(void) {
+    u32 ret;
+    asm("  calll 1f\n"
+        "1:popl %0\n"
+        "  subl $1b, %0"
+        : "=r"(ret));
+    return ret;
+}
+#else
 #define GLOBAL_SEGREG CS
-static inline u16 get_global_seg() {
+static inline u32 __attribute_const get_global_offset(void) {
+    return 0;
+}
+#endif
+static inline u16 get_global_seg(void) {
     return GET_SEG(GLOBAL_SEGREG);
 }
-#define GET_GLOBAL(var)                         \
-    GET_VAR(GLOBAL_SEGREG, (var))
+#define GET_GLOBAL(var)                                                 \
+    GET_VAR(GLOBAL_SEGREG, *(typeof(&(var)))((void*)&(var)              \
+                                             + get_global_offset()))
 #define SET_GLOBAL(var, val) do {               \
-        ASSERT32();                             \
+        ASSERT32FLAT();                         \
         (var) = (val);                          \
     } while (0)
-#if MODE16
+#if MODESEGMENT
 #define ADJUST_GLOBAL_PTR(var) (var)
 #else
 #define ADJUST_GLOBAL_PTR(var) ((typeof(var))((void*)var - BUILD_BIOS_ADDR))

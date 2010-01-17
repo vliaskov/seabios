@@ -348,7 +348,7 @@ entry_pnp_real:
 apm16protected_entry:
         pushfw          // save flags
         pushl %eax      // dummy
-        ENTRY_ARG handle_1553
+        ENTRY_ARG handle_apm16
         addw $4, %sp    // pop dummy
         popfw           // restore flags
         lretw
@@ -356,22 +356,46 @@ apm16protected_entry:
         .code32
         DECLFUNC apm32protected_entry
 apm32protected_entry:
-        pushfw
-        pushw %cs       // Setup for long jump to 16bit mode
-        pushw $1f
-        addw $8, 2(%esp)
-        ljmpw *(%esp)
-        .code16gcc
-1:
-        ENTRY_ARG_ESP handle_1553
+        pushfl
+        pushl %gs
+        pushl %cs               // Move second descriptor after %cs to %gs
+        addl $16, (%esp)
+        popl %gs
+        ENTRY_ARG_ESP handle_apm32
+        popl %gs
+        popfl
+        lretl
 
-        movw $2f,(%esp) // Setup for long jump back to 32bit mode
-        subw $8, 2(%esp)
-        ljmpw *(%esp)
-        .code32
-2:
-        addl $4, %esp   // pop call address
-        popfw
+// PCI-BIOS 32bit entry point
+        DECLFUNC pcibios32_entry
+pcibios32_entry:
+        pushfl
+        pushl %gs               // Backup %gs and set %gs=%ds
+        pushl %ds
+        popl %gs
+        ENTRY_ARG_ESP handle_pcibios32
+        popl %gs
+        popfl
+        lretl
+
+// BIOS32 support
+        EXPORTFUNC bios32_entry
+bios32_entry:
+        pushfl
+#if CONFIG_PCIBIOS
+        // Check for PCI-BIOS request
+        cmpl $0x49435024, %eax // $PCI
+        jne 1f
+        movl $BUILD_BIOS_ADDR, %ebx
+        movl $BUILD_BIOS_SIZE, %ecx
+        movl $pcibios32_entry, %edx
+        xorb %al, %al
+        jmp 2f
+#endif
+        // Unknown request
+1:      movb $0x80, %al
+        // Return to caller
+2:      popfl
         lretl
 
 // 32bit elf entry point

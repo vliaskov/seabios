@@ -36,7 +36,7 @@ __set_irq(int vector, void *loc)
     } while (0)
 
 static void
-init_ivt()
+init_ivt(void)
 {
     dprintf(3, "init ivt\n");
 
@@ -66,6 +66,10 @@ init_ivt()
     set_irq(0x1a, entry_1a);
     set_irq(0x40, entry_40);
 
+    // INT 60h-66h reserved for user interrupt
+    for (i=0x60; i<=0x66; i++)
+        SET_IVT(i, SEGOFF(0, 0));
+
     // set vector 0x79 to zero
     // this is used by 'gardian angel' protection system
     SET_IVT(0x79, SEGOFF(0, 0));
@@ -74,7 +78,7 @@ init_ivt()
 }
 
 static void
-init_bda()
+init_bda(void)
 {
     dprintf(3, "init bda\n");
 
@@ -113,7 +117,7 @@ ram_probe(void)
 
         // Check for memory over 4Gig
         u64 high = ((inb_cmos(CMOS_MEM_HIGHMEM_LOW) << 16)
-                    | (inb_cmos(CMOS_MEM_HIGHMEM_MID) << 24)
+                    | ((u32)inb_cmos(CMOS_MEM_HIGHMEM_MID) << 24)
                     | ((u64)inb_cmos(CMOS_MEM_HIGHMEM_HIGH) << 32));
         RamSizeOver4G = high;
         add_e820(0x100000000ull, high, E820_RAM);
@@ -136,7 +140,8 @@ ram_probe(void)
         // other page for EPT real mode pagetable
         add_e820(0xfffbc000, 4*4096, E820_RESERVED);
 
-    dprintf(1, "Ram Size=0x%08x\n", RamSize);
+    dprintf(1, "Ram Size=0x%08x (0x%08x%08x high)\n"
+            , RamSize, (u32)(RamSizeOver4G >> 32), (u32)RamSizeOver4G);
 }
 
 static void
@@ -158,7 +163,7 @@ init_bios_tables(void)
 
 // Main setup code.
 static void
-post()
+post(void)
 {
     // Detect and init ram.
     init_ivt();
@@ -184,6 +189,7 @@ post()
     smm_init();
 
     // Setup interfaces that option roms may need
+    bios32_setup();
     pmm_setup();
     pnp_setup();
     kbd_setup();
@@ -229,8 +235,8 @@ post()
 }
 
 // 32-bit entry point.
-void VISIBLE32
-_start()
+void VISIBLE32FLAT
+_start(void)
 {
     init_dma();
 

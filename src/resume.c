@@ -13,7 +13,7 @@
 
 // Reset DMA controller
 void
-init_dma()
+init_dma(void)
 {
     // first reset the DMA controllers
     outb(0, PORT_DMA1_MASTER_CLEAR);
@@ -93,9 +93,8 @@ handle_resume(u8 status)
     panic("Unimplemented shutdown status: %02x\n", status);
 }
 
-#if MODE16==0
-void VISIBLE32
-s3_resume()
+void VISIBLE32FLAT
+s3_resume(void)
 {
     if (!CONFIG_S3_RESUME)
         panic("S3 resume support not compiled in.\n");
@@ -123,4 +122,3 @@ s3_resume()
     }
     call16big(&br);
 }
-#endif

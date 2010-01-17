@@ -11,7 +11,7 @@
 #include "ioport.h" // outb
 #include "pci_ids.h" // PCI_VENDOR_ID_INTEL
 
-ASM32(
+ASM32FLAT(
     ".global smm_relocation_start\n"
     ".global smm_relocation_end\n"
     ".global smm_code_start\n"
@@ -73,7 +73,7 @@ extern u8 smm_relocation_start, smm_relocation_end;
 extern u8 smm_code_start, smm_code_end;
 
 void
-smm_init()
+smm_init(void)
 {
     if (CONFIG_COREBOOT)
         // SMM only supported on emulators.

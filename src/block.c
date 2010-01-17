@@ -31,7 +31,7 @@ getDrive(u8 exttype, u8 extdriveoffset)
 }
 
 struct drive_s *
-allocDrive()
+allocDrive(void)
 {
     int driveid = Drives.drivecount;
     if (driveid >= ARRAY_SIZE(Drives.drives))
@@ -180,20 +180,19 @@ fill_fdpt(struct drive_s *drive_g, int hdid)
     fdpt->heads = nlh;
     fdpt->sectors = nlspt;
 
-    if (nlc == npc && nlh == nph && nlspt == npspt)
-        // no logical CHS mapping used, just physical CHS
-        // use Standard Fixed Disk Parameter Table (FDPT)
-        return;
+    if (nlc != npc || nlh != nph || nlspt != npspt) {
+        // Logical mapping present - use extended structure.
 
-    // complies with Phoenix style Translated Fixed Disk Parameter
-    // Table (FDPT)
-    fdpt->phys_cylinders = npc;
-    fdpt->phys_heads = nph;
-    fdpt->phys_sectors = npspt;
-    fdpt->a0h_signature = 0xa0;
+        // complies with Phoenix style Translated Fixed Disk Parameter
+        // Table (FDPT)
+        fdpt->phys_cylinders = npc;
+        fdpt->phys_heads = nph;
+        fdpt->phys_sectors = npspt;
+        fdpt->a0h_signature = 0xa0;
 
-    // Checksum structure.
-    fdpt->checksum -= checksum(fdpt, sizeof(*fdpt));
+        // Checksum structure.
+        fdpt->checksum -= checksum(fdpt, sizeof(*fdpt));
+    }
 
     if (hdid == 0)
         SET_IVT(0x41, SEGOFF(get_ebda_seg(), offsetof(
@@ -283,7 +282,7 @@ map_floppy_drive(struct drive_s *drive_g)
 void
 describe_drive(struct drive_s *drive_g)
 {
-    ASSERT32();
+    ASSERT32FLAT();
     u8 type = GET_GLOBAL(drive_g->type);
     switch (type) {
     case DTYPE_FLOPPY:
@@ -369,7 +368,7 @@ send_disk_op(struct disk_op_s *op)
  ****************************************************************/
 
 void
-drive_setup()
+drive_setup(void)
 {
     memset(&Drives, 0, sizeof(Drives));
     memset(&Drives.idmap, 0xff, sizeof(Drives.idmap));

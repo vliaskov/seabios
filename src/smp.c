@@ -8,7 +8,6 @@
 #include "util.h" // dprintf
 #include "config.h" // CONFIG_*
 #include "cmos.h" // CMOS_BIOS_SMP_COUNT
-#include "farptr.h" // ASSERT32
 #include "paravirt.h"
 
 #define APIC_ICR_LOW ((u8*)BUILD_APIC_ADDR + 0x300)
@@ -35,7 +34,7 @@ wrmsr_smp(u32 index, u64 val)
 
 u32 CountCPUs VAR16VISIBLE;
 u32 MaxCountCPUs VAR16VISIBLE;
-extern void smp_ap_boot_code();
+extern void smp_ap_boot_code(void);
 ASM16(
     "  .global smp_ap_boot_code\n"
     "smp_ap_boot_code:\n"
@@ -70,7 +69,7 @@ ASM16(
 void
 smp_probe(void)
 {
-    ASSERT32();
+    ASSERT32FLAT();
     u32 eax, ebx, ecx, cpuid_features;
     cpuid(1, &eax, &ebx, &ecx, &cpuid_features);
     if (! (cpuid_features & CPUID_APIC)) {

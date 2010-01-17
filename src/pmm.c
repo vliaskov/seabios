@@ -11,11 +11,16 @@
 #include "biosvar.h" // GET_BDA
 
 
-#if MODE16
+#if MODESEGMENT
 // The 16bit pmm entry points runs in "big real" mode, and can
 // therefore read/write to the 32bit malloc variables.
-#define GET_PMMVAR(var) GET_FARVAR(0, (var))
-#define SET_PMMVAR(var, val) SET_FARVAR(0, (var), (val))
+#define GET_PMMVAR(var) ({                      \
+            SET_SEG(ES, 0);                     \
+            __GET_VAR("addr32 ", ES, (var)); })
+#define SET_PMMVAR(var, val) do {               \
+        SET_SEG(ES, 0);                         \
+        __SET_VAR("addr32 ", ES, (var), (val)); \
+    } while (0)
 #else
 #define GET_PMMVAR(var) (var)
 #define SET_PMMVAR(var, val) do { (var) = (val); } while (0)
@@ -26,11 +31,11 @@ struct zone_s {
     u32 top, bottom, cur;
 };
 
-struct zone_s ZoneLow VAR32VISIBLE, ZoneHigh VAR32VISIBLE;
-struct zone_s ZoneFSeg VAR32VISIBLE;
-struct zone_s ZoneTmpLow VAR32VISIBLE, ZoneTmpHigh VAR32VISIBLE;
+struct zone_s ZoneLow VAR32FLATVISIBLE, ZoneHigh VAR32FLATVISIBLE;
+struct zone_s ZoneFSeg VAR32FLATVISIBLE;
+struct zone_s ZoneTmpLow VAR32FLATVISIBLE, ZoneTmpHigh VAR32FLATVISIBLE;
 
-struct zone_s *Zones[] VAR32VISIBLE = {
+struct zone_s *Zones[] VAR32FLATVISIBLE = {
     &ZoneTmpLow, &ZoneLow, &ZoneFSeg, &ZoneTmpHigh, &ZoneHigh
 };
 
@@ -49,7 +54,7 @@ relocate_ebda(u32 newebda, u32 oldebda, u8 ebda_size)
         return -1;
 
     // Do copy
-    if (MODE16)
+    if (MODESEGMENT)
         memcpy_far(FLATPTR_TO_SEG(newebda)
                    , (void*)FLATPTR_TO_OFFSET(newebda)
                    , FLATPTR_TO_SEG(oldebda)
@@ -145,7 +150,7 @@ zone_free(void *data, u32 olddata)
 
 // Report the status of all the zones.
 static void
-dumpZones()
+dumpZones(void)
 {
     int i;
     for (i=0; i<ARRAY_SIZE(Zones); i++) {
@@ -172,7 +177,7 @@ struct pmmalloc_s {
     struct pmmalloc_s *next;
 };
 
-struct pmmalloc_s *PMMAllocs VAR32VISIBLE;
+struct pmmalloc_s *PMMAllocs VAR32FLATVISIBLE;
 
 // Allocate memory from the given zone and track it as a PMM allocation
 void *
@@ -277,18 +282,19 @@ pmm_find(u32 handle)
 }
 
 void
-malloc_setup()
+malloc_setup(void)
 {
-    ASSERT32();
+    ASSERT32FLAT();
     dprintf(3, "malloc setup\n");
 
     PMMAllocs = NULL;
 
     // Memory in 0xf0000 area.
-    extern u8 code32_start[];
-    if ((u32)code32_start > BUILD_BIOS_ADDR)
+    extern u8 code32flat_start[];
+    if ((u32)code32flat_start > BUILD_BIOS_ADDR)
         // Clear unused parts of f-segment
-        memset((void*)BUILD_BIOS_ADDR, 0, (u32)code32_start - BUILD_BIOS_ADDR);
+        memset((void*)BUILD_BIOS_ADDR, 0
+               , (u32)code32flat_start - BUILD_BIOS_ADDR);
     memset(BiosTableSpace, 0, CONFIG_MAX_BIOSTABLE);
     ZoneFSeg.bottom = (u32)BiosTableSpace;
     ZoneFSeg.top = ZoneFSeg.cur = ZoneFSeg.bottom + CONFIG_MAX_BIOSTABLE;
@@ -321,7 +327,7 @@ malloc_setup()
 }
 
 void
-malloc_finalize()
+malloc_finalize(void)
 {
     dprintf(3, "malloc finalize\n");
 
@@ -476,10 +482,10 @@ handle_pmm(u16 *args)
 }
 
 // romlayout.S
-extern void entry_pmm();
+extern void entry_pmm(void);
 
 void
-pmm_setup()
+pmm_setup(void)
 {
     if (! CONFIG_PMM)
         return;
@@ -492,7 +498,7 @@ pmm_setup()
 }
 
 void
-pmm_finalize()
+pmm_finalize(void)
 {
     if (! CONFIG_PMM)
         return;

@@ -55,13 +55,13 @@ handle_10(struct bregs *regs)
 
 // NMI handler
 void VISIBLE16
-handle_02()
+handle_02(void)
 {
     debug_isr(DEBUG_ISR_02);
 }
 
 void
-mathcp_setup()
+mathcp_setup(void)
 {
     dprintf(3, "math cp init\n");
     // 80x87 coprocessor installed
@@ -71,7 +71,7 @@ mathcp_setup()
 
 // INT 75 - IRQ13 - MATH COPROCESSOR EXCEPTION
 void VISIBLE16
-handle_75()
+handle_75(void)
 {
     debug_isr(DEBUG_ISR_75);
 
@@ -153,7 +153,7 @@ u64 rombios32_gdt[] VAR16VISIBLE __aligned(8) = {
     // 32 bit flat data segment (SEG32_MODE32_DS)
     GDT_LIMIT(0xfffff) | GDT_DATA | GDT_B | GDT_G,
     // 16 bit code segment base=0xf0000 limit=0xffff (SEG32_MODE16_CS)
-    GDT_LIMIT(0x0ffff) | GDT_CODE | GDT_BASE(0xf0000),
+    GDT_LIMIT(BUILD_BIOS_SIZE-1) | GDT_CODE | GDT_BASE(BUILD_BIOS_ADDR),
     // 16 bit data segment base=0x0 limit=0xffff (SEG32_MODE16_DS)
     GDT_LIMIT(0x0ffff) | GDT_DATA,
     // 16 bit code segment base=0 limit=0xffffffff (SEG32_MODE16BIG_CS)

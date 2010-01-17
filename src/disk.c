@@ -54,6 +54,7 @@ __disk_stub(struct bregs *regs, int lineno, const char *fname)
 #define DISK_STUB(regs)                         \
     __disk_stub((regs), __LINE__, __func__)
 
+// Get the cylinders/heads/sectors for the given drive.
 static void
 fillLCHS(struct drive_s *drive_g, u16 *nlc, u16 *nlh, u16 *nlspt)
 {
@@ -851,7 +852,7 @@ handle_13(struct bregs *regs)
 
 // record completion in BIOS task complete flag
 void VISIBLE16
-handle_76()
+handle_76(void)
 {
     debug_isr(DEBUG_ISR_76);
     SET_BDA(disk_interrupt_flag, 0xff);

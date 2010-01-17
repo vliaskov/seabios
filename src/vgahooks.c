@@ -69,7 +69,7 @@ getViaRamSpeed(u16 bdf)
 }
 
 static int
-getAMDRamSpeed()
+getAMDRamSpeed(void)
 {
     int bdf = pci_find_device(PCI_VENDOR_ID_AMD, PCI_DEVICE_ID_AMD_K8_NB_MEMCTL);
     if (bdf < 0)
@@ -106,7 +106,7 @@ getAMDRamSpeed()
 static void
 via_155f18(struct bregs *regs)
 {
-    u32 ramspeed, fbsize;
+    int ramspeed, fbsize;
 
     int bdf = pci_find_device(PCI_VENDOR_ID_VIA, PCI_DEVICE_ID_VIA_K8M890CE_3);
     if (bdf >= 0) {

@@ -53,8 +53,8 @@ handle_155301(struct bregs *regs)
 }
 
 // Assembler entry points defined in romlayout.S
-extern void apm16protected_entry();
-extern void apm32protected_entry();
+extern void apm16protected_entry(void);
+extern void apm32protected_entry(void);
 
 // APM 16 bit protected mode interface connect
 static void
@@ -189,7 +189,7 @@ handle_1553XX(struct bregs *regs)
     set_unimplemented(regs);
 }
 
-void VISIBLE16
+void
 handle_1553(struct bregs *regs)
 {
     if (! CONFIG_APMBIOS) {
@@ -215,4 +215,18 @@ handle_1553(struct bregs *regs)
     case 0x10: handle_155310(regs); break;
     default:   handle_1553XX(regs); break;
     }
+}
+
+void VISIBLE16
+handle_apm16(struct bregs *regs)
+{
+    debug_enter(regs, DEBUG_HDL_apm);
+    handle_1553(regs);
+}
+
+void VISIBLE32SEG
+handle_apm32(struct bregs *regs)
+{
+    debug_enter(regs, DEBUG_HDL_apm);
+    handle_1553(regs);
 }

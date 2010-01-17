@@ -170,12 +170,12 @@ get_pci_rom(struct rom_header *rom)
 
 // Return the memory position up to which roms may be located.
 static inline u32
-max_rom()
+max_rom(void)
 {
-    extern u8 code32_start[];
-    if ((u32)code32_start > BUILD_BIOS_ADDR)
+    extern u8 code32flat_start[];
+    if ((u32)code32flat_start > BUILD_BIOS_ADDR)
         return BUILD_BIOS_ADDR;
-    return (u32)code32_start;
+    return (u32)code32flat_start;
 }
 
 // Copy a rom to its permanent location below 1MiB
@@ -364,7 +364,7 @@ init_pcirom(u16 bdf, int isvga)
  ****************************************************************/
 
 void
-optionrom_setup()
+optionrom_setup(void)
 {
     if (! CONFIG_OPTIONROMS)
         return;
@@ -435,7 +435,7 @@ optionrom_setup()
 
 // Call into vga code to turn on console.
 void
-vga_setup()
+vga_setup(void)
 {
     VGAbdf = -1;
     RomEnd = BUILD_ROM_START;
@@ -477,7 +477,7 @@ vga_setup()
 }
 
 void
-s3_resume_vga_init()
+s3_resume_vga_init(void)
 {
     if (!CONFIG_S3_RESUME_VGA_INIT)
         return;
