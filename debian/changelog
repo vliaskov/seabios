@@ -1,8 +1,9 @@
 seabios (0.5.1-2) unstable; urgency=low
 
   * Update to 0.5.1-stable.
+  * Bump Standards-Version to 3.8.4 (no changes).
 
- -- Aurelien Jarno <aurel32@debian.org>  Fri, 05 Mar 2010 20:02:30 +0100
+ -- Aurelien Jarno <aurel32@debian.org>  Fri, 05 Mar 2010 20:05:31 +0100
 
 seabios (0.5.1-1) unstable; urgency=low
 
