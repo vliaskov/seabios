@@ -1,0 +1,72 @@
+From 6d75be2d038aa97a1ce52088c6f09d9829e5a39a Mon Sep 17 00:00:00 2001
+From: Kevin O'Connor <kevin@koconnor.net>
+Date: Thu, 28 Jan 2010 20:33:20 -0500
+Subject: [PATCH 1/2] Go back to using 0xf0000000 for PCI memory start.
+
+Qemu/Kvm still has some dependencies on 0xe0000000, so go back until
+they are ready.
+---
+ src/config.h  |    1 +
+ src/pciinit.c |    2 +-
+ 2 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/src/config.h b/src/config.h
+index 58c0ffc..6297a48 100644
+--- a/src/config.h
++++ b/src/config.h
+@@ -143,6 +143,7 @@
+ // 32KB for shadow ram copying (works around emulator deficiencies)
+ #define BUILD_BIOS_TMP_ADDR       0x30000
+ #define BUILD_MAX_HIGHMEM         0xe0000000
++#define BUILD_PCIMEM_START        0xf0000000
+ 
+ #define BUILD_APIC_ADDR           0xfee00000
+ #define BUILD_IOAPIC_ADDR         0xfec00000
+diff --git a/src/pciinit.c b/src/pciinit.c
+index a6070e7..0556ee2 100644
+--- a/src/pciinit.c
++++ b/src/pciinit.c
+@@ -194,7 +194,7 @@ pci_setup(void)
+     dprintf(3, "pci setup\n");
+ 
+     pci_bios_io_addr = 0xc000;
+-    pci_bios_mem_addr = BUILD_MAX_HIGHMEM;
++    pci_bios_mem_addr = BUILD_PCIMEM_START;
+ 
+     int bdf, max;
+     foreachpci(bdf, max) {
+-- 
+1.7.0
+
+From 9fb3f4d950744e97cc655b7d7b523d8bf101e4a0 Mon Sep 17 00:00:00 2001
+From: Magnus Christensson <mch@virtutech.com>
+Date: Wed, 25 Nov 2009 16:26:58 +0100
+Subject: [PATCH 2/2] Fix PkgLength calculation for the SSDT.
+
+Signed-off-by: Magnus Christensson <mch@virtutech.com>
+---
+ src/acpi.c |    6 ++++--
+ 1 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/acpi.c b/src/acpi.c
+index f613b03..244536a 100644
+--- a/src/acpi.c
++++ b/src/acpi.c
+@@ -429,10 +429,12 @@ build_ssdt(void)
+     // build processor scope header
+     *(ssdt_ptr++) = 0x10; // ScopeOp
+     if (cpu_length <= 0x3e) {
++        /* Handle 1-4 CPUs with one byte encoding */
+         *(ssdt_ptr++) = cpu_length + 1;
+     } else {
+-        *(ssdt_ptr++) = 0x7F;
+-        *(ssdt_ptr++) = (cpu_length + 2) >> 6;
++        /* Handle 5-314 CPUs with two byte encoding */
++        *(ssdt_ptr++) = 0x40 | ((cpu_length + 2) & 0xf);
++        *(ssdt_ptr++) = (cpu_length + 2) >> 4;
+     }
+     *(ssdt_ptr++) = '_'; // Name
+     *(ssdt_ptr++) = 'P';
+-- 
+1.7.0
+

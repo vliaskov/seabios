@@ -3,3 +3,4 @@
 02_optionrom_linuxboot.patch
 03_optionrom_multiboot.patch
 04_optionrom_vapic.patch
+99_upstream.patch
