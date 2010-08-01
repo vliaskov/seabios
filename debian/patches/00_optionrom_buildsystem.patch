@@ -56,7 +56,7 @@
 +
 +typedef void (*FWCfgCallback)(void *opaque, uint8_t *data);
 +
-+typedef struct _FWCfgState FWCfgState;
++typedef struct FWCfgState FWCfgState;
 +int fw_cfg_add_bytes(FWCfgState *s, uint16_t key, uint8_t *data, uint32_t len);
 +int fw_cfg_add_i16(FWCfgState *s, uint16_t key, uint16_t value);
 +int fw_cfg_add_i32(FWCfgState *s, uint16_t key, uint32_t value);
@@ -98,7 +98,7 @@
 +.PHONY : all clean build-all
 --- /dev/null
 +++ b/optionrom/optionrom.h
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,126 @@
 +/*
 + * Common Option ROM Functions
 + *
@@ -151,13 +151,7 @@
 +	bswap		%eax
 +.endm
 +
-+/*
-+ * Read a blob from the fw_cfg device.
-+ * Requires _ADDR, _SIZE and _DATA values for the parameter.
-+ *
-+ * Clobbers:	%eax, %edx, %es, %ecx, %edi
-+ */
-+#define read_fw_blob(var)				\
++#define read_fw_blob_pre(var)				\
 +	read_fw		var ## _ADDR;			\
 +	mov		%eax, %edi;			\
 +	read_fw		var ## _SIZE;			\
@@ -166,9 +160,31 @@
 +	mov		$BIOS_CFG_IOPORT_CFG, %edx;	\
 +	outw		%ax, (%dx);			\
 +	mov		$BIOS_CFG_IOPORT_DATA, %dx;	\
-+	cld;						\
++	cld
++
++/*
++ * Read a blob from the fw_cfg device.
++ * Requires _ADDR, _SIZE and _DATA values for the parameter.
++ *
++ * Clobbers:	%eax, %edx, %es, %ecx, %edi
++ */
++#define read_fw_blob(var)				\
++	read_fw_blob_pre(var);				\
 +	/* old as(1) doesn't like this insn so emit the bytes instead: \
 +	rep insb	(%dx), %es:(%edi);		\
++	*/						\
++	.dc.b		0xf3,0x6c
++
++/*
++ * Read a blob from the fw_cfg device in forced addr32 mode.
++ * Requires _ADDR, _SIZE and _DATA values for the parameter.
++ *
++ * Clobbers:	%eax, %edx, %es, %ecx, %edi
++ */
++#define read_fw_blob_addr32(var)				\
++	read_fw_blob_pre(var);				\
++	/* old as(1) doesn't like this insn so emit the bytes instead: \
++	addr32 rep insb	(%dx), %es:(%edi);		\
 +	*/						\
 +	.dc.b		0x67,0xf3,0x6c
 +

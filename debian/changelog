@@ -3,6 +3,9 @@ seabios (0.6.0+git20100710-1) UNRELEASED; urgency=low
   * New upstream snapshot, compatible with qemu 0.13.x.
   * Add conflicts with qemu-system (<< 0.13.0).
   * Bump Standards-Version to 3.9.1 (no changes).
+  * Update from QEMU 0.13:
+    - 00_optionrom_buildsystem.patch
+    - 02_optionrom_linuxboot.patch
 
  -- Aurelien Jarno <aurel32@debian.org>  Sun, 01 Aug 2010 17:53:32 +0200
 
