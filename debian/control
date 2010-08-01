@@ -4,7 +4,7 @@ Priority: extra
 Maintainer: Debian QEMU Team <pkg-qemu-devel@lists.alioth.debian.org>
 Uploaders: Aurelien Jarno <aurel32@debian.org>, Riku Voipio <riku.voipio@iki.fi>, Vagrant Cascadian <vagrant@debian.org>
 Build-Depends: debhelper (>= 5), python, iasl
-Standards-Version: 3.8.4
+Standards-Version: 3.9.1
 
 Package: seabios
 Architecture: all
