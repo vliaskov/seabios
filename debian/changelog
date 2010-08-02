@@ -1,3 +1,10 @@
+seabios (0.6.0+git20100710-2) unstable; urgency=low
+
+  * Temporarily reduce the conflicts on qemu-system due to the previous
+    upload done in unstable instead of experimental.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Mon, 02 Aug 2010 22:52:36 +0200
+
 seabios (0.6.0+git20100710-1) unstable; urgency=low
 
   * New upstream snapshot, compatible with qemu 0.13.x.
