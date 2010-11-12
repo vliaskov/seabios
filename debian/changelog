@@ -1,3 +1,9 @@
+seabios (0.6.0+git20100710-3) UNRELEASED; urgency=low
+
+  * update debian/watch file.
+
+ -- Vagrant Cascadian <vagrant@debian.org>  Fri, 12 Nov 2010 11:00:53 -0800
+
 seabios (0.6.0+git20100710-2) unstable; urgency=low
 
   * Temporarily reduce the conflicts on qemu-system due to the previous
