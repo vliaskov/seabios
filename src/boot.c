@@ -1,6 +1,6 @@
 // Code to load disk image and start system boot.
 //
-// Copyright (C) 2008  Kevin O'Connor <kevin@koconnor.net>
+// Copyright (C) 2008-2010  Kevin O'Connor <kevin@koconnor.net>
 // Copyright (C) 2002  MandrakeSoft S.A.
 //
 // This file may be distributed under the terms of the GNU LGPLv3 license.
@@ -227,7 +227,9 @@ interactive_bootmenu(void)
 
     printf("Press F12 for boot menu.\n\n");
 
+    enable_bootsplash();
     int scan_code = get_keystroke(CONFIG_BOOTMENU_WAIT);
+    disable_bootsplash();
     if (scan_code != 0x86)
         /* not F12 */
         return;
@@ -344,10 +346,6 @@ static void
 call_boot_entry(u16 bootseg, u16 bootip, u8 bootdrv)
 {
     dprintf(1, "Booting from %04x:%04x\n", bootseg, bootip);
-
-    /* Go back to text, the OS might expect it... (Can't do this any later) */
-    disable_bootsplash();
-
     struct bregs br;
     memset(&br, 0, sizeof(br));
     br.flags = F_IF;
@@ -462,7 +460,7 @@ do_boot(u16 seq_nr)
     printf("Booting from %s...\n"
            , strtcpy(desc, ie->description, ARRAY_SIZE(desc)));
 
-    switch(ie->type) {
+    switch (ie->type) {
     case IPL_TYPE_FLOPPY:
         boot_disk(0x00, IPL.checkfloppysig);
         break;

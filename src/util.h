@@ -110,6 +110,16 @@ static inline u32 __htonl(u32 val) {
 #define htons(x) __htons_constant(x)
 #define ntohs(x) htons(x)
 
+static inline u16 cpu_to_le16(u16 x)
+{
+    return x;
+}
+
+static inline u32 cpu_to_le32(u32 x)
+{
+    return x;
+}
+
 static inline u32 getesp(void) {
     u32 esp;
     asm("movl %%esp, %0" : "=rm"(esp));
@@ -152,15 +162,19 @@ static inline u8 readb(const void *addr) {
             : "ebx", "edx", "esi", "edi", "cc", "memory");              \
     } while (0)
 
-// GDT bit manipulation
-#define GDT_BASE(v)  ((((u64)(v) & 0xff000000) << 32)           \
-                      | (((u64)(v) & 0x00ffffff) << 16))
-#define GDT_LIMIT(v) ((((u64)(v) & 0x000f0000) << 32)   \
-                      | (((u64)(v) & 0x0000ffff) << 0))
+// GDT bits
 #define GDT_CODE     (0x9bULL << 40) // Code segment - P,R,A bits also set
 #define GDT_DATA     (0x93ULL << 40) // Data segment - W,A bits also set
 #define GDT_B        (0x1ULL << 54)  // Big flag
 #define GDT_G        (0x1ULL << 55)  // Granularity flag
+// GDT bits for segment base
+#define GDT_BASE(v)  ((((u64)(v) & 0xff000000) << 32)           \
+                      | (((u64)(v) & 0x00ffffff) << 16))
+// GDT bits for segment limit (0-1Meg)
+#define GDT_LIMIT(v) ((((u64)(v) & 0x000f0000) << 32)   \
+                      | (((u64)(v) & 0x0000ffff) << 0))
+// GDT bits for segment limit (0-4Gig in 4K chunks)
+#define GDT_GRANLIMIT(v) (GDT_G | GDT_LIMIT((v) >> 12))
 
 struct descloc_s {
     u16 length;
@@ -322,6 +336,12 @@ void bios32_setup(void);
 // shadow.c
 void make_bios_writable(void);
 void make_bios_readonly(void);
+void make_bios_writable_intel(u16 bdf, u32 pam0);
+void make_bios_readonly_intel(u16 bdf, u32 pam0);
+
+// smm.c
+void smm_save_and_copy(void);
+void smm_relocate_and_restore(void);
 
 // pciinit.c
 extern const u8 pci_irqs[4];
@@ -363,6 +383,7 @@ extern u32 RomEnd;
 
 // bootsplash.c
 void enable_vga_console(void);
+void enable_bootsplash(void);
 void disable_bootsplash(void);
 
 // resume.c
@@ -394,6 +415,9 @@ static inline void *malloc_high(u32 size) {
 static inline void *malloc_fseg(u32 size) {
     return pmm_malloc(&ZoneFSeg, PMM_DEFAULT_HANDLE, size, MALLOC_MIN_ALIGN);
 }
+static inline void *malloc_tmplow(u32 size) {
+    return pmm_malloc(&ZoneTmpLow, PMM_DEFAULT_HANDLE, size, MALLOC_MIN_ALIGN);
+}
 static inline void *malloc_tmphigh(u32 size) {
     return pmm_malloc(&ZoneTmpHigh, PMM_DEFAULT_HANDLE, size, MALLOC_MIN_ALIGN);
 }
@@ -401,7 +425,7 @@ static inline void *malloc_tmp(u32 size) {
     void *ret = malloc_tmphigh(size);
     if (ret)
         return ret;
-    return pmm_malloc(&ZoneTmpLow, PMM_DEFAULT_HANDLE, size, MALLOC_MIN_ALIGN);
+    return malloc_tmplow(size);
 }
 static inline void *memalign_low(u32 align, u32 size) {
     return pmm_malloc(&ZoneLow, PMM_DEFAULT_HANDLE, size, align);
