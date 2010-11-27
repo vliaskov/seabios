@@ -1,9 +1,10 @@
-seabios (0.6.1-1) UNRELEASED; urgency=low
+seabios (0.6.1.2-1) unstable; urgency=low
 
-  * New upstream version. 
+  * New upstream version from git tag. 
+    - Fixes virtio-blk failure after reboot (Closes: #604735).
   * Update debian/watch file.
 
- -- Vagrant Cascadian <vagrant@debian.org>  Fri, 12 Nov 2010 12:29:17 -0800
+ -- Vagrant Cascadian <vagrant@debian.org>  Fri, 26 Nov 2010 17:54:44 -0800
 
 seabios (0.6.0+git20100710-2) unstable; urgency=low
 
