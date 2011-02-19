@@ -1,9 +1,9 @@
-seabios (0.6.1.2-2) UNRELEASED; urgency=low
+seabios (0.6.1.2-2) unstable; urgency=low
 
   * Conflicts with qemu-system (<< 0.14.0).  Closes: bug#591780.
   * Switch to debhelper 7.
 
- -- Aurelien Jarno <aurel32@debian.org>  Sat, 19 Feb 2011 11:30:01 +0100
+ -- Aurelien Jarno <aurel32@debian.org>  Sat, 19 Feb 2011 10:37:48 +0000
 
 seabios (0.6.1.2-1) unstable; urgency=low
 
