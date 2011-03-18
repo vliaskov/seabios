@@ -1,0 +1,5 @@
+00_optionrom_buildsystem.patch
+01_optionrom_extboot.patch
+02_optionrom_linuxboot.patch
+03_optionrom_multiboot.patch
+04_optionrom_vapic.patch

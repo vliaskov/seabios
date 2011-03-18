@@ -1,0 +1,7 @@
+060e15edb7262b5fcc2eff7d9d0226bc  usr/share/doc/seabios/changelog.Debian.gz
+56e7117ebb924a21cdb08a7e51719324  usr/share/doc/seabios/copyright
+3253484dafeb64fa121a36ccdf14df05  usr/share/seabios/bios.bin
+a1158939643234245431f557f3cc6533  usr/share/seabios/optionrom/extboot.bin
+bcd43a4d8da5d02dc3573a851078c74f  usr/share/seabios/optionrom/linuxboot.bin
+4a0b5baf7b12f279e717b4ba0abb5763  usr/share/seabios/optionrom/multiboot.bin
+b5fe465101edd5a0ce8878170fc227b8  usr/share/seabios/optionrom/vapic.bin
