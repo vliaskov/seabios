@@ -1,0 +1,276 @@
+--- /dev/null
++++ b/optionrom/fw_cfg.h
+@@ -0,0 +1,70 @@
++#ifndef FW_CFG_H
++#define FW_CFG_H
++
++#define FW_CFG_SIGNATURE        0x00
++#define FW_CFG_ID               0x01
++#define FW_CFG_UUID             0x02
++#define FW_CFG_RAM_SIZE         0x03
++#define FW_CFG_NOGRAPHIC        0x04
++#define FW_CFG_NB_CPUS          0x05
++#define FW_CFG_MACHINE_ID       0x06
++#define FW_CFG_KERNEL_ADDR      0x07
++#define FW_CFG_KERNEL_SIZE      0x08
++#define FW_CFG_KERNEL_CMDLINE   0x09
++#define FW_CFG_INITRD_ADDR      0x0a
++#define FW_CFG_INITRD_SIZE      0x0b
++#define FW_CFG_BOOT_DEVICE      0x0c
++#define FW_CFG_NUMA             0x0d
++#define FW_CFG_BOOT_MENU        0x0e
++#define FW_CFG_MAX_CPUS         0x0f
++#define FW_CFG_KERNEL_ENTRY     0x10
++#define FW_CFG_KERNEL_DATA      0x11
++#define FW_CFG_INITRD_DATA      0x12
++#define FW_CFG_CMDLINE_ADDR     0x13
++#define FW_CFG_CMDLINE_SIZE     0x14
++#define FW_CFG_CMDLINE_DATA     0x15
++#define FW_CFG_SETUP_ADDR       0x16
++#define FW_CFG_SETUP_SIZE       0x17
++#define FW_CFG_SETUP_DATA       0x18
++#define FW_CFG_FILE_DIR         0x19
++
++#define FW_CFG_FILE_FIRST       0x20
++#define FW_CFG_FILE_SLOTS       0x10
++#define FW_CFG_MAX_ENTRY        (FW_CFG_FILE_FIRST+FW_CFG_FILE_SLOTS)
++
++#define FW_CFG_WRITE_CHANNEL    0x4000
++#define FW_CFG_ARCH_LOCAL       0x8000
++#define FW_CFG_ENTRY_MASK       ~(FW_CFG_WRITE_CHANNEL | FW_CFG_ARCH_LOCAL)
++
++#define FW_CFG_INVALID          0xffff
++
++#ifndef NO_QEMU_PROTOS
++typedef struct FWCfgFile {
++    uint32_t  size;        /* file size */
++    uint16_t  select;      /* write this to 0x510 to read it */
++    uint16_t  reserved;
++    char      name[56];
++} FWCfgFile;
++
++typedef struct FWCfgFiles {
++    uint32_t  count;
++    FWCfgFile f[];
++} FWCfgFiles;
++
++typedef void (*FWCfgCallback)(void *opaque, uint8_t *data);
++
++typedef struct FWCfgState FWCfgState;
++int fw_cfg_add_bytes(FWCfgState *s, uint16_t key, uint8_t *data, uint32_t len);
++int fw_cfg_add_i16(FWCfgState *s, uint16_t key, uint16_t value);
++int fw_cfg_add_i32(FWCfgState *s, uint16_t key, uint32_t value);
++int fw_cfg_add_i64(FWCfgState *s, uint16_t key, uint64_t value);
++int fw_cfg_add_callback(FWCfgState *s, uint16_t key, FWCfgCallback callback,
++                        void *callback_opaque, uint8_t *data, size_t len);
++int fw_cfg_add_file(FWCfgState *s, const char *dir, const char *filename,
++                    uint8_t *data, uint32_t len);
++FWCfgState *fw_cfg_init(uint32_t ctl_port, uint32_t data_port,
++                        target_phys_addr_t crl_addr, target_phys_addr_t data_addr);
++
++#endif /* NO_QEMU_PROTOS */
++
++#endif
+--- /dev/null
++++ b/optionrom/Makefile
+@@ -0,0 +1,22 @@
++all: build-all
++
++CFLAGS := -Wall -Wstrict-prototypes -Werror -fomit-frame-pointer -fno-builtin -fno-stack-protector
++CFLAGS += -I$(SRC_PATH)
++LD=ld
++OBJCOPY=objcopy
++
++build-all: $(subst .S,.bin,$(wildcard *.S))
++
++%.img: %.o
++	$(LD) -Ttext 0 -e _start -s -o $@ $<
++
++%.raw: %.img
++	$(OBJCOPY) -O binary -j .text $< $@
++
++%.bin: %.raw
++	$(SHELL) ./signrom.sh $< $@
++
++clean:
++	rm -f *.o *.d *.raw *.img *.bin *~
++
++.PHONY : all clean build-all
+--- /dev/null
++++ b/optionrom/optionrom.h
+@@ -0,0 +1,126 @@
++/*
++ * Common Option ROM Functions
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, see <http://www.gnu.org/licenses/>.
++ *
++ * Copyright Novell Inc, 2009
++ *   Authors: Alexander Graf <agraf@suse.de>
++ */
++
++
++#define NO_QEMU_PROTOS
++#include "fw_cfg.h"
++
++#define BIOS_CFG_IOPORT_CFG	0x510
++#define BIOS_CFG_IOPORT_DATA	0x511
++
++/* Break the translation block flow so -d cpu shows us values */
++#define DEBUG_HERE \
++	jmp		1f;				\
++	1:
++	
++/*
++ * Read a variable from the fw_cfg device.
++ * Clobbers:	%edx
++ * Out:		%eax
++ */
++.macro read_fw VAR
++	mov		$\VAR, %ax
++	mov		$BIOS_CFG_IOPORT_CFG, %dx
++	outw		%ax, (%dx)
++	mov		$BIOS_CFG_IOPORT_DATA, %dx
++	inb		(%dx), %al
++	shl		$8, %eax
++	inb		(%dx), %al
++	shl		$8, %eax
++	inb		(%dx), %al
++	shl		$8, %eax
++	inb		(%dx), %al
++	bswap		%eax
++.endm
++
++#define read_fw_blob_pre(var)				\
++	read_fw		var ## _ADDR;			\
++	mov		%eax, %edi;			\
++	read_fw		var ## _SIZE;			\
++	mov		%eax, %ecx;			\
++	mov		$var ## _DATA, %ax;		\
++	mov		$BIOS_CFG_IOPORT_CFG, %edx;	\
++	outw		%ax, (%dx);			\
++	mov		$BIOS_CFG_IOPORT_DATA, %dx;	\
++	cld
++
++/*
++ * Read a blob from the fw_cfg device.
++ * Requires _ADDR, _SIZE and _DATA values for the parameter.
++ *
++ * Clobbers:	%eax, %edx, %es, %ecx, %edi
++ */
++#define read_fw_blob(var)				\
++	read_fw_blob_pre(var);				\
++	/* old as(1) doesn't like this insn so emit the bytes instead: \
++	rep insb	(%dx), %es:(%edi);		\
++	*/						\
++	.dc.b		0xf3,0x6c
++
++/*
++ * Read a blob from the fw_cfg device in forced addr32 mode.
++ * Requires _ADDR, _SIZE and _DATA values for the parameter.
++ *
++ * Clobbers:	%eax, %edx, %es, %ecx, %edi
++ */
++#define read_fw_blob_addr32(var)				\
++	read_fw_blob_pre(var);				\
++	/* old as(1) doesn't like this insn so emit the bytes instead: \
++	addr32 rep insb	(%dx), %es:(%edi);		\
++	*/						\
++	.dc.b		0x67,0xf3,0x6c
++
++#define OPTION_ROM_START					\
++    .code16;						\
++    .text;						\
++	.global 	_start;				\
++    _start:;						\
++	.short		0xaa55;				\
++	.byte		(_end - _start) / 512;
++
++#define BOOT_ROM_START					\
++	OPTION_ROM_START				\
++	push		%eax;				\
++	push		%ds;				\
++							\
++	/* setup ds so we can access the IVT */		\
++	xor		%ax, %ax;			\
++	mov		%ax, %ds;			\
++							\
++	/* install our int 19 handler */		\
++	movw		$int19_handler, (0x19*4);	\
++	mov		%cs, (0x19*4+2);		\
++							\
++	pop		%ds;				\
++	pop		%eax;				\
++	lret;						\
++							\
++    int19_handler:;					\
++	/* DS = CS */					\
++	movw		%cs, %ax;			\
++	movw		%ax, %ds;
++
++#define OPTION_ROM_END					\
++    .align 512, 0;					\
++    _end:
++
++#define BOOT_ROM_END					\
++	OPTION_ROM_END
++
+--- /dev/null
++++ b/optionrom/signrom.sh
+@@ -0,0 +1,46 @@
++#!/bin/sh
++
++# Option ROM Signing utility
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation; either version 2 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program; if not, see <http://www.gnu.org/licenses/>.
++#
++# Copyright Novell Inc, 2009
++#   Authors: Alexander Graf <agraf@suse.de>
++#
++# Syntax: signrom.sh <input> <output>
++
++# did we get proper arguments?
++test "$1" -a "$2" || exit 1
++
++sum=0
++
++# find out the file size
++x=`dd if="$1" bs=1 count=1 skip=2 2>/dev/null | od -t u1 -A n`
++#size=`expr $x \* 512 - 1`
++size=$(( $x * 512 - 1 ))
++
++# now get the checksum
++nums=`od -A n -t u1 -v "$1"`
++for i in ${nums}; do
++    # add each byte's value to sum
++    sum=`expr $sum + $i`
++done
++
++sum=$(( $sum % 256 ))
++sum=$(( 256 - $sum ))
++sum_octal=$( printf "%o" $sum )
++
++# and write the output file
++cp "$1" "$2"
++printf "\\$sum_octal" | dd of="$2" bs=1 count=1 seek=$size conv=notrunc 2>/dev/null
