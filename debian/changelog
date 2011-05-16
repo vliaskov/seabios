@@ -1,3 +1,10 @@
+seabios (0.6.1.2-3) UNRELEASED; urgency=low
+
+  * Add patches/05_struct_bregs.patch from upstream to fix FTBFS with
+    gcc-4.6.  Closes: bug#625000.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Mon, 16 May 2011 18:38:16 +0200
+
 seabios (0.6.1.2-2) unstable; urgency=low
 
   * Conflicts with qemu-system (<< 0.14.0).  Closes: bug#591780.
