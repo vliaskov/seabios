@@ -1,10 +1,10 @@
-seabios (0.6.1.2-3) UNRELEASED; urgency=low
+seabios (0.6.1.2-3) unstable; urgency=low
 
   * Add patches/05_struct_bregs.patch from upstream to fix FTBFS with
     gcc-4.6.  Closes: bug#625000.
   * Bump Standards-Version to 3.9.2 (no changes).
 
- -- Aurelien Jarno <aurel32@debian.org>  Mon, 16 May 2011 18:38:16 +0200
+ -- Aurelien Jarno <aurel32@debian.org>  Sat, 21 May 2011 11:47:36 +0200
 
 seabios (0.6.1.2-2) unstable; urgency=low
 
