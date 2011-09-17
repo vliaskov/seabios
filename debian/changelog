@@ -1,4 +1,10 @@
-seabios (0.6.2-pre) unstable; urgency low
+seabios (0.6.2+pb-1) UNRELEASED; urgency=low
+
+  * Increment version, thats all.
+
+ -- Holger Levsen <holger@layer-acht.org>  Sat, 17 Sep 2011 10:50:13 +0200
+
+seabios (0.6.2-pre) unstable; urgency=low
 
   * new upstream for cpu-hotplugging
 
