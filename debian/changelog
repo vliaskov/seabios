@@ -1,4 +1,11 @@
-seabios (0.6.2-pre) unstable; urgency low
+seabios (0.6.2+pb-1) stable; urgency=low
+
+  * Non-maintainer upload.
+  * whatever
+
+ -- Mathias Klette <mathias.klette@profitbricks.com>  Fri, 07 Oct 2011 20:37:50 +0200
+
+seabios (0.6.2-pre) unstable; urgency=low
 
   * new upstream for cpu-hotplugging
 
