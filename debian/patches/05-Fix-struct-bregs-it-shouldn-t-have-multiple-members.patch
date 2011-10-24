@@ -1,0 +1,31 @@
+From 88db9fd632bf3f650244ec69e2f4fd6b2aa5fd3d Mon Sep 17 00:00:00 2001
+From: Kevin O'Connor <kevin@koconnor.net>
+Date: Sat, 7 May 2011 13:56:48 -0400
+Subject: [PATCH] Fix struct bregs - it shouldn't have multiple members with
+ the same name.
+
+This fixes a compile error on gcc 4.6.
+---
+ src/bregs.h |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/bregs.h b/src/bregs.h
+index 9a381d0..f026fa8 100644
+--- a/src/bregs.h
++++ b/src/bregs.h
+@@ -37,9 +37,9 @@
+ struct bregs {
+     u16 ds;
+     u16 es;
+-    UREG(edi, di, di_hi, di_lo);
+-    UREG(esi, si, si_hi, si_lo);
+-    UREG(ebp, bp, bp_hi, bp_lo);
++    UREG(edi, di, di8u, di8l);
++    UREG(esi, si, si8u, si8l);
++    UREG(ebp, bp, bp8u, bp8l);
+     UREG(ebx, bx, bh, bl);
+     UREG(edx, dx, dh, dl);
+     UREG(ecx, cx, ch, cl);
+-- 
+1.7.6.3
+
