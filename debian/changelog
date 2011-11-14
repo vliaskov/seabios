@@ -1,3 +1,9 @@
+seabios (0.6.2+pb-2) stable; urgency=low
+
+  * Fix CPU hotplug after reboot
+
+ -- Vasilis Liaskovitis <vasilis.liaskovitis@profitbricks.com>  Mon, 14 Nov 2011 13:53:12 +0200
+
 seabios (0.6.2+pb-1) stable; urgency=low
 
   * Non-maintainer upload.
