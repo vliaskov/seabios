@@ -1,0 +1,64 @@
+ src/paravirt.c |   12 ++++++++++++
+ src/paravirt.h |    2 ++
+ src/smp.c      |    5 +++--
+ 3 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/src/paravirt.c b/src/paravirt.c
+index 9cf77de..22698f3 100644
+--- a/src/paravirt.c
++++ b/src/paravirt.c
+@@ -305,6 +305,18 @@ u16 qemu_cfg_get_max_cpus(void)
+     return cnt;
+ }
+ 
++s16 qemu_cfg_get_hplug_cpus(void)
++{
++    s16 cnt;
++
++    if (!qemu_cfg_present)
++        return 0;
++
++    qemu_cfg_read_entry(&cnt, QEMU_CFG_HPLUG_CPUS, sizeof(cnt));
++
++    return cnt;
++}
++
+ static QemuCfgFile LastFile;
+ 
+ static u32
+diff --git a/src/paravirt.h b/src/paravirt.h
+index 4a370a0..88e9ff3 100644
+--- a/src/paravirt.h
++++ b/src/paravirt.h
+@@ -33,6 +33,7 @@ static inline int kvm_para_available(void)
+ #define QEMU_CFG_BOOT_MENU		0x0e
+ #define QEMU_CFG_MAX_CPUS		0x0f
+ #define QEMU_CFG_FILE_DIR               0x19
++#define QEMU_CFG_HPLUG_CPUS             0x1a
+ #define QEMU_CFG_ARCH_LOCAL		0x8000
+ #define QEMU_CFG_ACPI_TABLES		(QEMU_CFG_ARCH_LOCAL + 0)
+ #define QEMU_CFG_SMBIOS_ENTRIES		(QEMU_CFG_ARCH_LOCAL + 1)
+@@ -55,6 +56,7 @@ int qemu_cfg_smbios_load_external(int type, char **p, unsigned *nr_structs,
+ int qemu_cfg_get_numa_nodes(void);
+ void qemu_cfg_get_numa_data(u64 *data, int n);
+ u16 qemu_cfg_get_max_cpus(void);
++s16 qemu_cfg_get_hplug_cpus(void);
+ 
+ typedef struct QemuCfgFile {
+     u32  size;        /* file size */
+diff --git a/src/smp.c b/src/smp.c
+index 8c077a1..06ebec8 100644
+--- a/src/smp.c
++++ b/src/smp.c
+@@ -114,8 +114,9 @@ smp_probe(void)
+     if (CONFIG_COREBOOT) {
+         msleep(10);
+     } else {
+-        u8 cmos_smp_count = inb_cmos(CMOS_BIOS_SMP_COUNT);
+-        while (cmos_smp_count + 1 != readl(&CountCPUs))
++        s8 cmos_smp_count = (s8)inb_cmos(CMOS_BIOS_SMP_COUNT);
++        s8 HotPlugCPUs = (s8)qemu_cfg_get_hplug_cpus();
++        while ( (u8) (cmos_smp_count + HotPlugCPUs + 1) != readl(&CountCPUs))
+             yield();
+     }
+ 

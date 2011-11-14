@@ -1,0 +1,16 @@
+ src/acpi.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/src/acpi.c b/src/acpi.c
+index dfd50c2..4122038 100755
+--- a/src/acpi.c
++++ b/src/acpi.c
+@@ -649,7 +649,7 @@ build_srat(void)
+         core->proximity_lo = curnode;
+         memset(core->proximity_hi, 0, 3);
+         core->local_sapic_eid = 0;
+-        if (i < CountCPUs)
++        if (i < MaxCountCPUs)
+             core->flags = cpu_to_le32(1);
+         else
+             core->flags = 0;
