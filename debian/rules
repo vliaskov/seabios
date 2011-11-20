@@ -23,7 +23,7 @@ clean:
 	dh_testdir
 	dh_testroot
 	rm -f build-stamp
-	$(MAKE) clean
+	$(MAKE) distclean
 	! [ -f optionrom/Makefile ] || $(MAKE) -C optionrom clean
 	rm -f $(CURDIR)/src/acpi-dsdt.aml
 	rm -f $(CURDIR)/src/acpi-dsdt.hex
