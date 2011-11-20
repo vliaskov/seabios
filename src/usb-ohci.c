@@ -204,15 +204,21 @@ free:
 }
 
 void
-ohci_init(u16 bdf, int busid)
+ohci_init(struct pci_device *pci, int busid)
 {
     if (! CONFIG_USB_OHCI)
         return;
     struct usb_ohci_s *cntl = malloc_tmphigh(sizeof(*cntl));
+    if (!cntl) {
+        warn_noalloc();
+        return;
+    }
     memset(cntl, 0, sizeof(*cntl));
     cntl->usb.busid = busid;
+    cntl->usb.pci = pci;
     cntl->usb.type = USB_TYPE_OHCI;
 
+    u16 bdf = pci->bdf;
     u32 baseaddr = pci_config_readl(bdf, PCI_BASE_ADDRESS_0);
     cntl->regs = (void*)(baseaddr & PCI_BASE_ADDRESS_MEM_MASK);
 
@@ -412,6 +418,21 @@ ohci_control(struct usb_pipe *p, int dir, const void *cmd, int cmdsize
 }
 
 struct usb_pipe *
+ohci_alloc_bulk_pipe(struct usb_pipe *dummy)
+{
+    if (! CONFIG_USB_OHCI)
+        return NULL;
+    dprintf(1, "OHCI Bulk transfers not supported.\n");
+    return NULL;
+}
+
+int
+ohci_send_bulk(struct usb_pipe *p, int dir, void *data, int datasize)
+{
+    return -1;
+}
+
+struct usb_pipe *
 ohci_alloc_intr_pipe(struct usb_pipe *dummy, int frameexp)
 {
     if (! CONFIG_USB_OHCI)
@@ -485,7 +506,7 @@ ohci_poll_intr(struct usb_pipe *p, void *data)
 
     struct ohci_pipe *pipe = container_of(p, struct ohci_pipe, pipe);
     struct ohci_td *tds = GET_FLATPTR(pipe->tds);
-    struct ohci_td *head = (void*)GET_FLATPTR(pipe->ed.hwHeadP);
+    struct ohci_td *head = (void*)(GET_FLATPTR(pipe->ed.hwHeadP) & ~(ED_C|ED_H));
     struct ohci_td *tail = (void*)GET_FLATPTR(pipe->ed.hwTailP);
     int count = GET_FLATPTR(pipe->count);
     int pos = (tail - tds + 1) % count;

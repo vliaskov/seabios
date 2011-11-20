@@ -3,6 +3,9 @@
 
 #include "types.h" // u32
 
+#define PCI_ROM_SLOT 6
+#define PCI_NUM_REGIONS 7
+
 static inline u8 pci_bdf_to_bus(u16 bdf) {
     return bdf >> 8;
 }
@@ -25,16 +28,6 @@ static inline u16 pci_bus_devfn_to_bdf(int bus, u16 devfn) {
     return (bus << 8) | devfn;
 }
 
-static inline u32 pci_vd(u16 vendor, u16 device) {
-    return (device << 16) | vendor;
-}
-static inline u16 pci_vd_to_ven(u32 vd) {
-    return vd & 0xffff;
-}
-static inline u16 pci_vd_to_dev(u32 vd) {
-    return vd >> 16;
-}
-
 void pci_config_writel(u16 bdf, u32 addr, u32 val);
 void pci_config_writew(u16 bdf, u32 addr, u16 val);
 void pci_config_writeb(u16 bdf, u32 addr, u8 val);
@@ -43,22 +36,46 @@ u16 pci_config_readw(u16 bdf, u32 addr);
 u8 pci_config_readb(u16 bdf, u32 addr);
 void pci_config_maskw(u16 bdf, u32 addr, u16 off, u16 on);
 
-int pci_find_vga(void);
-int pci_find_device(u16 vendid, u16 devid);
-int pci_find_class(u16 classid);
+struct pci_device *pci_find_device(u16 vendid, u16 devid);
+struct pci_device *pci_find_class(u16 classid);
 
-int pci_next(int bdf, int *pmax);
-#define foreachpci(BDF, MAX)                    \
-    for (MAX=0x0100, BDF=pci_next(0, &MAX)      \
-         ; BDF >= 0                             \
-         ; BDF=pci_next(BDF+1, &MAX))
+struct pci_device {
+    u16 bdf;
+    u8 rootbus;
+    struct pci_device *next;
+    struct pci_device *parent;
 
-#define foreachpci_in_bus(BDF, MAX, BUS)                                \
-    for (MAX = pci_bus_devfn_to_bdf(BUS, 0) + 0x0100,                   \
-         BDF = pci_next(pci_bus_devfn_to_bdf(BUS, 0), &MAX)             \
-         ; BDF >= 0 && BDF < pci_bus_devfn_to_bdf(BUS, 0) + 0x0100      \
-         ; MAX = pci_bus_devfn_to_bdf(BUS, 0) + 0x0100,                 \
-           BDF = pci_next(BDF + 1, &MAX))
+    // Configuration space device information
+    u16 vendor, device;
+    u16 class;
+    u8 prog_if, revision;
+    u8 header_type;
+    u8 secondary_bus;
+    struct {
+        u32 addr;
+        u32 size;
+        int is64;
+    } bars[PCI_NUM_REGIONS];
+
+    // Local information on device.
+    int have_driver;
+};
+extern struct pci_device *PCIDevices;
+extern int MaxPCIBus;
+int pci_probe_host(void);
+void pci_probe_devices(void);
+static inline u32 pci_classprog(struct pci_device *pci) {
+    return (pci->class << 8) | pci->prog_if;
+}
+
+#define foreachpci(PCI)                         \
+    for (PCI=PCIDevices; PCI; PCI=PCI->next)
+
+int pci_next(int bdf, int bus);
+#define foreachbdf(BDF, BUS)                                    \
+    for (BDF=pci_next(pci_bus_devfn_to_bdf((BUS), 0)-1, (BUS))  \
+         ; BDF >= 0                                             \
+         ; BDF=pci_next(BDF, (BUS)))
 
 #define PCI_ANY_ID      (~0)
 struct pci_device_id {
@@ -66,7 +83,7 @@ struct pci_device_id {
     u32 devid;
     u32 class;
     u32 class_mask;
-    void (*func)(u16 bdf, void *arg);
+    void (*func)(struct pci_device *pci, void *arg);
 };
 
 #define PCI_DEVICE(vendor_id, device_id, init_func)     \
@@ -92,8 +109,15 @@ struct pci_device_id {
         .vendid = 0,                            \
     }
 
-int pci_init_device(const struct pci_device_id *table, u16 bdf, void *arg);
-int pci_find_init_device(const struct pci_device_id *ids, void *arg);
+int pci_init_device(const struct pci_device_id *ids
+                    , struct pci_device *pci, void *arg);
+struct pci_device *pci_find_init_device(const struct pci_device_id *ids
+                                        , void *arg);
+void pci_reboot(void);
+
+// helper functions to access pci mmio bars from real mode
+u32 pci_readl(u32 addr);
+void pci_writel(u32 addr, u32 val);
 
 // pirtable.c
 void create_pirtable(void);

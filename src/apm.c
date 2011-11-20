@@ -53,14 +53,14 @@ handle_155301(struct bregs *regs)
 }
 
 // Assembler entry points defined in romlayout.S
-extern void apm16protected_entry(void);
-extern void apm32protected_entry(void);
+extern void entry_apm16(void);
+extern void entry_apm32(void);
 
 // APM 16 bit protected mode interface connect
 static void
 handle_155302(struct bregs *regs)
 {
-    regs->bx = (u32)apm16protected_entry;
+    regs->bx = (u32)entry_apm16;
     regs->ax = SEG_BIOS; // 16 bit code segment base
     regs->si = 0xfff0;   // 16 bit code segment size
     regs->cx = SEG_BIOS; // data segment address
@@ -73,7 +73,7 @@ static void
 handle_155303(struct bregs *regs)
 {
     regs->ax = SEG_BIOS; // 32 bit code segment base
-    regs->ebx = (u32)apm32protected_entry;
+    regs->ebx = (u32)entry_apm32;
     regs->cx = SEG_BIOS; // 16 bit code segment base
     // 32 bit code segment size (low 16 bits)
     // 16 bit code segment size (high 16 bits)
@@ -105,6 +105,15 @@ handle_155306(struct bregs *regs)
     set_success(regs);
 }
 
+void
+apm_shutdown(void)
+{
+    irq_disable();
+    out_str("Shutdown");
+    for (;;)
+        hlt();
+}
+
 // APM Set Power State
 static void
 handle_155307(struct bregs *regs)
@@ -121,10 +130,7 @@ handle_155307(struct bregs *regs)
         out_str("Suspend");
         break;
     case 3:
-        irq_disable();
-        out_str("Shutdown");
-        for (;;)
-            hlt();
+        apm_shutdown();
         break;
     }
     set_success(regs);
