@@ -2,7 +2,10 @@ seabios (1.6.3-1) UNRELEASED; urgency=low
 
   * New upstream release (1.6.3, jumped from 0.6.2).
     Upstream now uses kbuild-like configuration.
-  * removed debian/patches/05_struct_bregs.patch (applied upstream).
+    Use distclean target not clean, to remove .config too.
+  * Removed debian/patches/05_struct_bregs.patch (applied upstream).
+  * Removed usage of $(CURDIR) from "some" debian/rules
+    (it was used inconsistently and is not needed anyway).
 
  -- Michael Tokarev <mjt@tls.msk.ru>  Sun, 20 Nov 2011 23:39:51 +0400
 

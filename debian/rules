@@ -25,9 +25,9 @@ clean:
 	rm -f build-stamp
 	$(MAKE) distclean
 	! [ -f optionrom/Makefile ] || $(MAKE) -C optionrom clean
-	rm -f $(CURDIR)/src/acpi-dsdt.aml
-	rm -f $(CURDIR)/src/acpi-dsdt.hex
-	rm -f $(CURDIR)/tools/*pyc
+	rm -f src/acpi-dsdt.aml
+	rm -f src/acpi-dsdt.hex
+	rm -f tools/*pyc
 	dh_clean
 
 install: build
