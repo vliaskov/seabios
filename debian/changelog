@@ -1,5 +1,6 @@
 seabios (1.6.3-1) UNRELEASED; urgency=low
 
+  [ Michael Tokarev ]
   * New upstream release (1.6.3, jumped from 0.6.2).
     Upstream now uses kbuild-like configuration.
     Use distclean target not clean, to remove .config too.
@@ -7,7 +8,10 @@ seabios (1.6.3-1) UNRELEASED; urgency=low
   * Removed usage of $(CURDIR) from "some" debian/rules
     (it was used inconsistently and is not needed anyway).
 
- -- Michael Tokarev <mjt@tls.msk.ru>  Sun, 20 Nov 2011 23:39:51 +0400
+  [ Vagrant Cascadian ]
+  * debian/control: Add Vcs-* headers.
+
+ -- Vagrant Cascadian <vagrant@debian.org>  Sun, 20 Nov 2011 18:58:51 -0800
 
 seabios (0.6.1.2-3) unstable; urgency=low
 
