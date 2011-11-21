@@ -7,6 +7,7 @@ Build-Depends: debhelper (>= 7), python, iasl
 Standards-Version: 3.9.2
 Vcs-Browser: http://git.debian.org/?p=pkg-qemu/seabios.git
 Vcs-Git: git://git.debian.org/git/pkg-qemu/seabios.git
+Homepage: http://www.seabios.org
 
 Package: seabios
 Architecture: all
