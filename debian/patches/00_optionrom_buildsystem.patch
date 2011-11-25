@@ -1,5 +1,14 @@
---- /dev/null
-+++ b/optionrom/fw_cfg.h
+taken from qemu commits:
+hw/fw_cfg.h de1f34cb6351c028ebcc61fea9fa78008ca1a529
+pc-bios/optionrom/optionrom.h 75b9f69057b166876a0c33d5fd86aa59ccfd3812
+scripts/signrom.sh 4c3b5a4891c44ebbc23d80f95e5b66e2ec66b8b1
+
+pc-bios/optionrom/Makefile builds all the various .bin files.
+
+Index: seabios/optionrom/fw_cfg.h
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ seabios/optionrom/fw_cfg.h	2011-11-24 17:04:06.326331255 -0800
 @@ -0,0 +1,70 @@
 +#ifndef FW_CFG_H
 +#define FW_CFG_H
@@ -63,16 +72,18 @@
 +int fw_cfg_add_i64(FWCfgState *s, uint16_t key, uint64_t value);
 +int fw_cfg_add_callback(FWCfgState *s, uint16_t key, FWCfgCallback callback,
 +                        void *callback_opaque, uint8_t *data, size_t len);
-+int fw_cfg_add_file(FWCfgState *s, const char *dir, const char *filename,
-+                    uint8_t *data, uint32_t len);
++int fw_cfg_add_file(FWCfgState *s, const char *filename, uint8_t *data,
++                    uint32_t len);
 +FWCfgState *fw_cfg_init(uint32_t ctl_port, uint32_t data_port,
 +                        target_phys_addr_t crl_addr, target_phys_addr_t data_addr);
 +
 +#endif /* NO_QEMU_PROTOS */
 +
 +#endif
---- /dev/null
-+++ b/optionrom/Makefile
+Index: seabios/optionrom/Makefile
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ seabios/optionrom/Makefile	2011-11-24 17:07:55.547469163 -0800
 @@ -0,0 +1,22 @@
 +all: build-all
 +
@@ -96,9 +107,11 @@
 +	rm -f *.o *.d *.raw *.img *.bin *~
 +
 +.PHONY : all clean build-all
---- /dev/null
-+++ b/optionrom/optionrom.h
-@@ -0,0 +1,126 @@
+Index: seabios/optionrom/optionrom.h
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ seabios/optionrom/optionrom.h	2011-11-24 17:04:06.326331255 -0800
+@@ -0,0 +1,136 @@
 +/*
 + * Common Option ROM Functions
 + *
@@ -198,22 +211,28 @@
 +
 +#define BOOT_ROM_START					\
 +	OPTION_ROM_START				\
-+	push		%eax;				\
-+	push		%ds;				\
-+							\
-+	/* setup ds so we can access the IVT */		\
-+	xor		%ax, %ax;			\
-+	mov		%ax, %ds;			\
-+							\
-+	/* install our int 19 handler */		\
-+	movw		$int19_handler, (0x19*4);	\
-+	mov		%cs, (0x19*4+2);		\
-+							\
-+	pop		%ds;				\
-+	pop		%eax;				\
 +	lret;						\
-+							\
-+    int19_handler:;					\
++	.org 		0x18;				\
++	.short		0;				\
++	.short		_pnph;				\
++    _pnph:						\
++	.ascii		"$PnP";				\
++	.byte		0x01;				\
++	.byte		( _pnph_len / 16 );		\
++	.short		0x0000;				\
++	.byte		0x00;				\
++	.byte		0x00;				\
++	.long		0x00000000;			\
++	.short		_manufacturer;			\
++	.short		_product;			\
++	.long		0x00000000;			\
++	.short		0x0000;				\
++	.short		0x0000;				\
++	.short		_bev;				\
++	.short		0x0000;				\
++	.short		0x0000;				\
++	.equ		_pnph_len, . - _pnph;		\
++    _bev:;						\
 +	/* DS = CS */					\
 +	movw		%cs, %ax;			\
 +	movw		%ax, %ds;
@@ -223,11 +242,17 @@
 +    _end:
 +
 +#define BOOT_ROM_END					\
++    _manufacturer:;					\
++	.asciz "QEMU";					\
++    _product:;						\
++	.asciz BOOT_ROM_PRODUCT;			\
 +	OPTION_ROM_END
 +
---- /dev/null
-+++ b/optionrom/signrom.sh
-@@ -0,0 +1,46 @@
+Index: seabios/optionrom/signrom.sh
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ seabios/optionrom/signrom.sh	2011-11-24 17:04:06.326331255 -0800
+@@ -0,0 +1,45 @@
 +#!/bin/sh
 +
 +# Option ROM Signing utility
@@ -261,14 +286,13 @@
 +size=$(( $x * 512 - 1 ))
 +
 +# now get the checksum
-+nums=`od -A n -t u1 -v "$1"`
++nums=`od -A n -t u1 -v -N $size "$1"`
 +for i in ${nums}; do
 +    # add each byte's value to sum
-+    sum=`expr $sum + $i`
++    sum=`expr \( $sum + $i \) % 256`
 +done
 +
-+sum=$(( $sum % 256 ))
-+sum=$(( 256 - $sum ))
++sum=$(( (256 - $sum) % 256 ))
 +sum_octal=$( printf "%o" $sum )
 +
 +# and write the output file
