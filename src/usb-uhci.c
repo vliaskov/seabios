@@ -179,13 +179,19 @@ fail:
 }
 
 void
-uhci_init(u16 bdf, int busid)
+uhci_init(struct pci_device *pci, int busid)
 {
     if (! CONFIG_USB_UHCI)
         return;
+    u16 bdf = pci->bdf;
     struct usb_uhci_s *cntl = malloc_tmphigh(sizeof(*cntl));
+    if (!cntl) {
+        warn_noalloc();
+        return;
+    }
     memset(cntl, 0, sizeof(*cntl));
     cntl->usb.busid = busid;
+    cntl->usb.pci = pci;
     cntl->usb.type = USB_TYPE_UHCI;
     cntl->iobase = (pci_config_readl(bdf, PCI_BASE_ADDRESS_4)
                     & PCI_BASE_ADDRESS_IO_MASK);

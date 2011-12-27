@@ -14,7 +14,7 @@
 #include "pci.h" // foreachpci
 #include "pci_ids.h" // PCI_CLASS_STORAGE_OTHER
 #include "pci_regs.h" // PCI_INTERRUPT_LINE
-#include "boot.h" // add_bcv_hd
+#include "boot.h" // boot_add_hd
 #include "disk.h" // struct ata_s
 #include "ata.h" // ATA_CB_STAT
 #include "blockcmd.h" // CDB_CMD_READ_10
@@ -602,6 +602,9 @@ process_ata_op(struct disk_op_s *op)
 int
 atapi_cmd_data(struct disk_op_s *op, void *cdbcmd, u16 blocksize)
 {
+    if (! CONFIG_ATA)
+        return 0;
+
     struct atadrive_s *adrive_g = container_of(
         op->drive_g, struct atadrive_s, drive);
     struct ata_channel_s *chan_gf = GET_GLOBAL(adrive_g->chan_gf);
@@ -701,8 +704,8 @@ send_ata_identity(struct atadrive_s *adrive_g, u16 *buffer, int command)
 }
 
 // Extract the ATA/ATAPI version info.
-static int
-extract_version(u16 *buffer)
+int
+ata_extract_version(u16 *buffer)
 {
     // Extract ATA/ATAPI version.
     u16 ataversion = buffer[80];
@@ -716,19 +719,15 @@ extract_version(u16 *buffer)
 #define MAXMODEL 40
 
 // Extract the ATA/ATAPI model info.
-static char *
-extract_model(char *model, u16 *buffer)
+char *
+ata_extract_model(char *model, u32 size, u16 *buffer)
 {
     // Read model name
     int i;
-    for (i=0; i<MAXMODEL/2; i++)
+    for (i=0; i<size/2; i++)
         *(u16*)&model[i*2] = ntohs(buffer[27+i]);
-    model[MAXMODEL] = 0x00;
-
-    // Trim trailing spaces from model name.
-    for (i=MAXMODEL-1; i>0 && model[i] == 0x20; i--)
-        model[i] = 0x00;
-
+    model[size] = 0x00;
+    nullTrailingSpace(model);
     return model;
 }
 
@@ -736,16 +735,12 @@ extract_model(char *model, u16 *buffer)
 static struct atadrive_s *
 init_atadrive(struct atadrive_s *dummy, u16 *buffer)
 {
-    char *desc = malloc_tmp(MAXDESCSIZE);
     struct atadrive_s *adrive_g = malloc_fseg(sizeof(*adrive_g));
-    if (!adrive_g || !desc) {
+    if (!adrive_g) {
         warn_noalloc();
-        free(desc);
-        free(adrive_g);
         return NULL;
     }
     memset(adrive_g, 0, sizeof(*adrive_g));
-    adrive_g->drive.desc = desc;
     adrive_g->chan_gf = dummy->chan_gf;
     adrive_g->slave = dummy->slave;
     adrive_g->drive.cntl_id = adrive_g->chan_gf->chanid * 2 + dummy->slave;
@@ -771,15 +766,21 @@ init_drive_atapi(struct atadrive_s *dummy, u16 *buffer)
     adrive_g->drive.sectors = (u64)-1;
     u8 iscd = ((buffer[0] >> 8) & 0x1f) == 0x05;
     char model[MAXMODEL+1];
-    snprintf(adrive_g->drive.desc, MAXDESCSIZE, "ata%d-%d: %s ATAPI-%d %s"
-             , adrive_g->chan_gf->chanid, adrive_g->slave
-             , extract_model(model, buffer), extract_version(buffer)
-             , (iscd ? "DVD/CD" : "Device"));
-    dprintf(1, "%s\n", adrive_g->drive.desc);
+    char *desc = znprintf(MAXDESCSIZE
+                          , "DVD/CD [ata%d-%d: %s ATAPI-%d %s]"
+                          , adrive_g->chan_gf->chanid, adrive_g->slave
+                          , ata_extract_model(model, MAXMODEL, buffer)
+                          , ata_extract_version(buffer)
+                          , (iscd ? "DVD/CD" : "Device"));
+    dprintf(1, "%s\n", desc);
 
     // fill cdidmap
-    if (iscd)
-        map_cd_drive(&adrive_g->drive);
+    if (iscd) {
+        int prio = bootprio_find_ata_device(adrive_g->chan_gf->pci_tmp,
+                                            adrive_g->chan_gf->chanid,
+                                            adrive_g->slave);
+        boot_add_cd(&adrive_g->drive, desc, prio);
+    }
 
     return adrive_g;
 }
@@ -817,18 +818,19 @@ init_drive_ata(struct atadrive_s *dummy, u16 *buffer)
         adjprefix = 'G';
     }
     char model[MAXMODEL+1];
-    snprintf(adrive_g->drive.desc, MAXDESCSIZE
-             , "ata%d-%d: %s ATA-%d Hard-Disk (%u %ciBytes)"
-             , adrive_g->chan_gf->chanid, adrive_g->slave
-             , extract_model(model, buffer), extract_version(buffer)
-             , (u32)adjsize, adjprefix);
-    dprintf(1, "%s\n", adrive_g->drive.desc);
+    char *desc = znprintf(MAXDESCSIZE
+                          , "ata%d-%d: %s ATA-%d Hard-Disk (%u %ciBytes)"
+                          , adrive_g->chan_gf->chanid, adrive_g->slave
+                          , ata_extract_model(model, MAXMODEL, buffer)
+                          , ata_extract_version(buffer)
+                          , (u32)adjsize, adjprefix);
+    dprintf(1, "%s\n", desc);
 
-    // Setup disk geometry translation.
-    setup_translation(&adrive_g->drive);
-
+    int prio = bootprio_find_ata_device(adrive_g->chan_gf->pci_tmp,
+                                        adrive_g->chan_gf->chanid,
+                                        adrive_g->slave);
     // Register with bcv system.
-    add_bcv_internal(&adrive_g->drive);
+    boot_add_hd(&adrive_g->drive, desc, prio);
 
     return adrive_g;
 }
@@ -939,88 +941,115 @@ ata_detect(void *data)
 
 // Initialize an ata controller and detect its drives.
 static void
-init_controller(int chanid, int bdf, int irq, u32 port1, u32 port2, u32 master)
+init_controller(struct pci_device *pci, int irq
+                , u32 port1, u32 port2, u32 master)
 {
+    static int chanid = 0;
     struct ata_channel_s *chan_gf = malloc_fseg(sizeof(*chan_gf));
     if (!chan_gf) {
         warn_noalloc();
         return;
     }
-    chan_gf->chanid = chanid;
+    chan_gf->chanid = chanid++;
     chan_gf->irq = irq;
-    chan_gf->pci_bdf = bdf;
+    chan_gf->pci_bdf = pci ? pci->bdf : -1;
+    chan_gf->pci_tmp = pci;
     chan_gf->iobase1 = port1;
     chan_gf->iobase2 = port2;
     chan_gf->iomaster = master;
     dprintf(1, "ATA controller %d at %x/%x/%x (irq %d dev %x)\n"
-            , chanid, port1, port2, master, irq, bdf);
+            , chanid, port1, port2, master, irq, chan_gf->pci_bdf);
     run_thread(ata_detect, chan_gf);
 }
 
 #define IRQ_ATA1 14
 #define IRQ_ATA2 15
 
+// Handle controllers on an ATA PCI device.
+static void
+init_pciata(struct pci_device *pci, u8 prog_if)
+{
+    pci->have_driver = 1;
+    u16 bdf = pci->bdf;
+    u8 pciirq = pci_config_readb(bdf, PCI_INTERRUPT_LINE);
+    int master = 0;
+    if (CONFIG_ATA_DMA && prog_if & 0x80) {
+        // Check for bus-mastering.
+        u32 bar = pci_config_readl(bdf, PCI_BASE_ADDRESS_4);
+        if (bar & PCI_BASE_ADDRESS_SPACE_IO) {
+            master = bar & PCI_BASE_ADDRESS_IO_MASK;
+            pci_config_maskw(bdf, PCI_COMMAND, 0, PCI_COMMAND_MASTER);
+        }
+    }
+
+    u32 port1, port2, irq;
+    if (prog_if & 1) {
+        port1 = (pci_config_readl(bdf, PCI_BASE_ADDRESS_0)
+                 & PCI_BASE_ADDRESS_IO_MASK);
+        port2 = (pci_config_readl(bdf, PCI_BASE_ADDRESS_1)
+                 & PCI_BASE_ADDRESS_IO_MASK);
+        irq = pciirq;
+    } else {
+        port1 = PORT_ATA1_CMD_BASE;
+        port2 = PORT_ATA1_CTRL_BASE;
+        irq = IRQ_ATA1;
+    }
+    init_controller(pci, irq, port1, port2, master);
+
+    if (prog_if & 4) {
+        port1 = (pci_config_readl(bdf, PCI_BASE_ADDRESS_2)
+                 & PCI_BASE_ADDRESS_IO_MASK);
+        port2 = (pci_config_readl(bdf, PCI_BASE_ADDRESS_3)
+                 & PCI_BASE_ADDRESS_IO_MASK);
+        irq = pciirq;
+    } else {
+        port1 = PORT_ATA2_CMD_BASE;
+        port2 = PORT_ATA2_CTRL_BASE;
+        irq = IRQ_ATA2;
+    }
+    init_controller(pci, irq, port1, port2, master ? master + 8 : 0);
+}
+
+static void
+found_genericata(struct pci_device *pci, void *arg)
+{
+    init_pciata(pci, pci->prog_if);
+}
+
+static void
+found_compatibleahci(struct pci_device *pci, void *arg)
+{
+    if (CONFIG_AHCI)
+        // Already handled directly via native ahci interface.
+        return;
+    init_pciata(pci, 0x8f);
+}
+
+static const struct pci_device_id pci_ata_tbl[] = {
+    PCI_DEVICE_CLASS(PCI_ANY_ID, PCI_ANY_ID, PCI_CLASS_STORAGE_IDE
+                     , found_genericata),
+    PCI_DEVICE(PCI_VENDOR_ID_ATI, 0x4391, found_compatibleahci),
+    PCI_DEVICE_END,
+};
+
 // Locate and init ata controllers.
 static void
 ata_init(void)
 {
-    // Scan PCI bus for ATA adapters
-    int count=0, pcicount=0;
-    int bdf, max;
-    foreachpci(bdf, max) {
-        pcicount++;
-        if (pci_config_readw(bdf, PCI_CLASS_DEVICE) != PCI_CLASS_STORAGE_IDE)
-            continue;
-
-        u8 pciirq = pci_config_readb(bdf, PCI_INTERRUPT_LINE);
-        u8 prog_if = pci_config_readb(bdf, PCI_CLASS_PROG);
-        int master = 0;
-        if (CONFIG_ATA_DMA && prog_if & 0x80) {
-            // Check for bus-mastering.
-            u32 bar = pci_config_readl(bdf, PCI_BASE_ADDRESS_4);
-            if (bar & PCI_BASE_ADDRESS_SPACE_IO) {
-                master = bar & PCI_BASE_ADDRESS_IO_MASK;
-                pci_config_maskw(bdf, PCI_COMMAND, 0, PCI_COMMAND_MASTER);
-            }
-        }
-
-        u32 port1, port2, irq;
-        if (prog_if & 1) {
-            port1 = (pci_config_readl(bdf, PCI_BASE_ADDRESS_0)
-                     & PCI_BASE_ADDRESS_IO_MASK);
-            port2 = (pci_config_readl(bdf, PCI_BASE_ADDRESS_1)
-                     & PCI_BASE_ADDRESS_IO_MASK);
-            irq = pciirq;
-        } else {
-            port1 = PORT_ATA1_CMD_BASE;
-            port2 = PORT_ATA1_CTRL_BASE;
-            irq = IRQ_ATA1;
-        }
-        init_controller(count, bdf, irq, port1, port2, master);
-        count++;
-
-        if (prog_if & 4) {
-            port1 = (pci_config_readl(bdf, PCI_BASE_ADDRESS_2)
-                     & PCI_BASE_ADDRESS_IO_MASK);
-            port2 = (pci_config_readl(bdf, PCI_BASE_ADDRESS_3)
-                     & PCI_BASE_ADDRESS_IO_MASK);
-            irq = pciirq;
-        } else {
-            port1 = PORT_ATA2_CMD_BASE;
-            port2 = PORT_ATA2_CTRL_BASE;
-            irq = IRQ_ATA2;
-        }
-        init_controller(count, bdf, irq, port1, port2, master ? master + 8 : 0);
-        count++;
-    }
-
-    if (!CONFIG_COREBOOT && !pcicount) {
+    if (!CONFIG_COREBOOT && !PCIDevices) {
         // No PCI devices found - probably a QEMU "-M isapc" machine.
         // Try using ISA ports for ATA controllers.
-        init_controller(0, -1, IRQ_ATA1
+        init_controller(NULL, IRQ_ATA1
                         , PORT_ATA1_CMD_BASE, PORT_ATA1_CTRL_BASE, 0);
-        init_controller(1, -1, IRQ_ATA2
+        init_controller(NULL, IRQ_ATA2
                         , PORT_ATA2_CMD_BASE, PORT_ATA2_CTRL_BASE, 0);
+        return;
+    }
+
+    // Scan PCI bus for ATA adapters
+    struct pci_device *pci;
+    foreachpci(pci) {
+        pci_init_device(pci_ata_tbl, pci, NULL);
     }
 }
 

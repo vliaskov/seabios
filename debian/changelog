@@ -1,21 +1,43 @@
-seabios (0.6.2+pb-2) stable; urgency=low
+seabios (1.6.3-1) experimental; urgency=low
 
-  * Fix CPU hotplug after reboot
+  [ Michael Tokarev ]
+  * New upstream release (1.6.3, jumped from 0.6.2).
+    Upstream now uses kbuild-like configuration.
+    Use distclean target not clean, to remove .config too.
+  * Removed debian/patches/05_struct_bregs.patch (applied upstream).
+  * Removed usage of $(CURDIR) from "some" debian/rules
+    (it was used inconsistently and is not needed anyway).
 
- -- Vasilis Liaskovitis <vasilis.liaskovitis@profitbricks.com>  Mon, 14 Nov 2011 13:53:12 +0200
+  [ Vagrant Cascadian ]
+  * debian/control: Add Vcs-* headers.
+  * debian/control: Add Homepage header.
+  * debian/rules: Add dummy build-arch and build-indep targets. 
+  * Update optionrom patches.
 
-seabios (0.6.2+pb-1) stable; urgency=low
+ -- Vagrant Cascadian <vagrant@debian.org>  Mon, 28 Nov 2011 23:22:34 -0800
 
-  * Non-maintainer upload.
-  * whatever
+seabios (0.6.1.2-3) unstable; urgency=low
 
- -- Mathias Klette <mathias.klette@profitbricks.com>  Fri, 07 Oct 2011 20:39:29 +0200
+  * Add patches/05_struct_bregs.patch from upstream to fix FTBFS with
+    gcc-4.6.  Closes: bug#625000.
+  * Bump Standards-Version to 3.9.2 (no changes).
 
-seabios (0.6.2-pre) unstable; urgency=low
+ -- Aurelien Jarno <aurel32@debian.org>  Sat, 21 May 2011 11:47:36 +0200
 
-  * new upstream for cpu-hotplugging
+seabios (0.6.1.2-2) unstable; urgency=low
 
- -- Christine Fornfeist <christine.fornfeist@profitbricks.com>  Tue, 02 Nov 2010 12:18:27 +0100
+  * Conflicts with qemu-system (<< 0.14.0).  Closes: bug#591780.
+  * Switch to debhelper 7.
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sat, 19 Feb 2011 10:37:48 +0000
+
+seabios (0.6.1.2-1) unstable; urgency=low
+
+  * New upstream version from git tag. 
+    - Fixes virtio-blk failure after reboot (Closes: #604735).
+  * Update debian/watch file.
+
+ -- Vagrant Cascadian <vagrant@debian.org>  Fri, 26 Nov 2010 17:54:44 -0800
 
 seabios (0.6.0+git20100710-2) unstable; urgency=low
 

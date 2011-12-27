@@ -1,12 +1,25 @@
---- /dev/null
-+++ b/optionrom/vapic.S
-@@ -0,0 +1,315 @@
+Index: seabios/optionrom/vapic.S
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ seabios/optionrom/vapic.S	2011-11-24 16:09:22.510047328 -0800
+@@ -0,0 +1,330 @@
 +	.text 0
 +	.code16
 +.global _start
 +_start:
 +	.short 0xaa55
 +	.byte (_end - _start) / 512
++	# clear vapic area: firmware load using rep insb may cause
++	# stale tpr/isr/irr data to corrupt the vapic area.
++	push %es
++	push %cs
++	pop %es
++	xor %ax, %ax
++	mov $vapic_size/2, %cx
++	lea vapic, %di
++	cld
++	rep stosw
++	pop %es
 +	mov $vapic_base, %ax
 +	out %ax, $0x7e
 +	lret
@@ -315,4 +328,8 @@
 +
 +vapic:
 +. = . + vapic_size
++
++.byte 0  # reserve space for signature
++.align 512, 0
++
 +_end:

@@ -11,13 +11,13 @@
  ****************************************************************/
 
         .code16gcc
-.include "out/ccode.16.s"
+#include "ccode.16.s"
 
 #include "config.h" // CONFIG_*
 #include "ioport.h" // PORT_A20
 #include "bregs.h" // CR0_*
 #include "cmos.h" // CMOS_RESET_CODE
-#include "../out/asm-offsets.h" // BREGS_*
+#include "asm-offsets.h" // BREGS_*
 #include "entryfuncs.S" // ENTRY_*
 
 
@@ -26,6 +26,7 @@
  ****************************************************************/
 
 // Place CPU into 32bit mode from 16bit mode.
+// %edx = return location (in 32bit mode)
 // Clobbers: ecx, flags, segment registers, cr0, idt/gdt
         DECLFUNC transition32
 transition32:
@@ -68,9 +69,10 @@ transition32:
         movw %ax, %gs
 
         movl %ecx, %eax
-        retl
+        jmpl *%edx
 
 // Place CPU into 16bit mode from 32bit mode.
+// %edx = return location (in 16bit mode)
 // Clobbers: ecx, flags, segment registers, cr0, idt/gdt
         DECLFUNC transition16
         .global transition16big
@@ -130,7 +132,7 @@ transition16big:
         movw %ax, %ss  // Assume stack is in segment 0
 
         movl %ecx, %eax
-        retl
+        jmpl *%edx
 
 // Call a 16bit function from 16bit mode with a specified cpu register state
 // %eax = address of struct bregs
@@ -195,18 +197,22 @@ __call16:
         .global __call16big_from32
         .code32
 __call16_from32:
-        pushl $1f
+        movl $1f, %edx
         jmp transition16
 __call16big_from32:
-        pushl $1f
+        movl $1f, %edx
         jmp transition16big
 
         // Make call.
         .code16gcc
 1:      calll __call16
         // Return via transition32
+        movl $(2f + BUILD_BIOS_ADDR), %edx
         jmp transition32
+        .code32
+2:      retl
 
+        .code16gcc
 // IRQ trampolines
         .macro IRQ_TRAMPOLINE num
         DECLFUNC irq_trampoline_0x\num
@@ -224,63 +230,24 @@ __call16big_from32:
 
 
 /****************************************************************
- * POST entry point
+ * Misc. entry points.
  ****************************************************************/
 
-        DECLFUNC entry_post
-entry_post:
-        // Enable cache
-        movl %cr0, %eax
-        andl $~(CR0_CD|CR0_NW), %eax
-        movl %eax, %cr0
-
+// Resume (and reboot) entry point - called from entry_post
+        DECLFUNC entry_resume
+entry_resume:
         // Disable interrupts
         cli
         cld
-
-        // Check for restart indicator.
-        movl $CMOS_RESET_CODE|NMI_DISABLE_BIT, %eax
-        outb %al, $PORT_CMOS_INDEX
-        inb $PORT_CMOS_DATA, %al
-        cmpb $0x0, %al
-        jnz 1f
-
-        // Normal entry point
-        ENTRY_INTO32 _start
-
-        // Entry point when a post call looks like a resume.
-1:
-        // Save old shutdown status.
-        movl %eax, %ebx
-
-        // Clear shutdown status register.
-        movl $CMOS_RESET_CODE|NMI_DISABLE_BIT, %eax
-        outb %al, $PORT_CMOS_INDEX
-        xorl %eax, %eax
-        outb %al, $PORT_CMOS_DATA
-
         // Use a stack in EBDA
         movw $SEG_BDA, %ax
         movw %ax, %ds
         movw BDA_ebda_seg, %ax
-
-        cmpw $EBDA_SEGMENT_START, %ax
-        jle 2f
-        // EBDA segment doesn't look valid - use startup value.
-        movw $EBDA_SEGMENT_START, %ax
-
-2:      movw %ax, %ds
+        movw %ax, %ds
         movw %ax, %ss
         movl $EBDA_OFFSET_TOP_STACK, %esp
-
         // Call handler.
-        movl %ebx, %eax
         jmp handle_resume
-
-
-/****************************************************************
- * Misc. entry points.
- ****************************************************************/
 
 // PMM entry point
         DECLFUNC entry_pmm
@@ -297,8 +264,10 @@ entry_pmm:
         pushw %ds
         movw %ss, %cx           // Move %ss to %ds
         movw %cx, %ds
-        leal 28(%esp), %eax     // %eax points to start of args
-        calll handle_pmm
+        movl $_cfunc32flat_handle_pmm, %eax // Setup: call32(handle_pmm, args, -1)
+        leal 28(%esp), %edx     // %edx points to start of args
+        movl $-1, %ecx
+        calll call32
         movw %ax, 12(%esp)      // Modify %ax:%dx to return %eax
         shrl $16, %eax
         movw %ax, 4(%esp)
@@ -344,8 +313,8 @@ entry_pnp_real:
         lretw
 
 // APM entry points
-        DECLFUNC apm16protected_entry
-apm16protected_entry:
+        DECLFUNC entry_apm16
+entry_apm16:
         pushfw          // save flags
         pushl %eax      // dummy
         ENTRY_ARG handle_apm16
@@ -354,33 +323,33 @@ apm16protected_entry:
         lretw
 
         .code32
-        DECLFUNC apm32protected_entry
-apm32protected_entry:
+        DECLFUNC entry_apm32
+entry_apm32:
         pushfl
         pushl %gs
         pushl %cs               // Move second descriptor after %cs to %gs
         addl $16, (%esp)
         popl %gs
-        ENTRY_ARG_ESP handle_apm32
+        ENTRY_ARG_ESP _cfunc32seg_handle_apm32
         popl %gs
         popfl
         lretl
 
 // PCI-BIOS 32bit entry point
-        DECLFUNC pcibios32_entry
-pcibios32_entry:
+        DECLFUNC entry_pcibios32
+entry_pcibios32:
         pushfl
         pushl %gs               // Backup %gs and set %gs=%ds
         pushl %ds
         popl %gs
-        ENTRY_ARG_ESP handle_pcibios32
+        ENTRY_ARG_ESP _cfunc32seg_handle_pcibios32
         popl %gs
         popfl
         lretl
 
 // BIOS32 support
-        EXPORTFUNC bios32_entry
-bios32_entry:
+        EXPORTFUNC entry_bios32
+entry_bios32:
         pushfl
 #if CONFIG_PCIBIOS
         // Check for PCI-BIOS request
@@ -388,7 +357,7 @@ bios32_entry:
         jne 1f
         movl $BUILD_BIOS_ADDR, %ebx
         movl $BUILD_BIOS_SIZE, %ecx
-        movl $pcibios32_entry, %edx
+        movl $entry_pcibios32, %edx
         xorb %al, %al
         jmp 2f
 #endif
@@ -399,8 +368,8 @@ bios32_entry:
         lretl
 
 // 32bit elf entry point
-        EXPORTFUNC post32
-post32:
+        EXPORTFUNC entry_elf
+entry_elf:
         cli
         cld
         lidtl (BUILD_BIOS_ADDR + pmode_IDT_info)
@@ -412,7 +381,7 @@ post32:
         movw %ax, %gs
         movw %ax, %ss
         movl $BUILD_STACK_ADDR, %esp
-        ljmpl $SEG32_MODE32_CS, $_start
+        ljmpl $SEG32_MODE32_CS, $_cfunc32flat_handle_post
 
         .code16gcc
 
@@ -420,32 +389,6 @@ post32:
 /****************************************************************
  * Interrupt entry points
  ****************************************************************/
-
-        // Define an entry point for an interrupt (no args passed).
-        .macro IRQ_ENTRY num
-        .global entry_\num
-        entry_\num :
-        pushl $ handle_\num
-        jmp irqentry
-        .endm
-
-        // Define an entry point for an interrupt (can read/modify args).
-        .macro IRQ_ENTRY_ARG num
-        .global entry_\num
-        entry_\num :
-        pushl $ handle_\num
-        jmp irqentryarg
-        .endm
-
-        // Macros that put each handler into its own section
-        .macro DECL_IRQ_ENTRY num
-        DECLFUNC entry_\num
-        IRQ_ENTRY \num
-        .endm
-        .macro DECL_IRQ_ENTRY_ARG num
-        DECLFUNC entry_\num
-        IRQ_ENTRY_ARG \num
-        .endm
 
         // Main entry point for interrupts without args
         DECLFUNC irqentry
@@ -459,6 +402,33 @@ irqentryarg:
         ENTRY_ARG_ST
         iretw
 
+        // Define an entry point for an interrupt (no args passed).
+        .macro IRQ_ENTRY num
+        .global entry_\num
+        entry_\num :
+        pushl $ handle_\num
+        jmp irqentry
+        .endm
+
+        .macro DECL_IRQ_ENTRY num
+        DECLFUNC entry_\num
+        IRQ_ENTRY \num
+        .endm
+
+        // Define an entry point for an interrupt (can read/modify args).
+        .macro IRQ_ENTRY_ARG num
+        .global entry_\num
+        entry_\num :
+        pushl $ handle_\num
+        jmp irqentryarg
+        .endm
+
+        .macro DECL_IRQ_ENTRY_ARG num
+        DECLFUNC entry_\num
+        IRQ_ENTRY_ARG \num
+        .endm
+
+        // Various entry points (that don't require a fixed location).
         DECL_IRQ_ENTRY_ARG 13
         DECL_IRQ_ENTRY 76
         DECL_IRQ_ENTRY 70
@@ -470,11 +440,11 @@ irqentryarg:
         // int 18/19 are special - they reset stack and call into 32bit mode.
         DECLFUNC entry_19
 entry_19:
-        ENTRY_INTO32 handle_19
+        ENTRY_INTO32 _cfunc32flat_handle_19
 
         DECLFUNC entry_18
 entry_18:
-        ENTRY_INTO32 handle_18
+        ENTRY_INTO32 _cfunc32flat_handle_18
 
 
 /****************************************************************
@@ -487,8 +457,10 @@ entry_18:
         .endm
 
         ORG 0xe05b
-entry_post_official:
-        jmp entry_post
+entry_post:
+        cmpl $0, %cs:HaveRunPost                // Check for resume/reboot
+        jnz entry_resume
+        ENTRY_INTO32 _cfunc32flat_handle_post   // Normal entry point
 
         ORG 0xe2c3
         IRQ_ENTRY 02
@@ -571,7 +543,7 @@ entry_iret_official:
         ORG 0xfff0 // Power-up Entry Point
         .global reset_vector
 reset_vector:
-        ljmpw $SEG_BIOS, $entry_post_official
+        ljmpw $SEG_BIOS, $entry_post
 
         // 0xfff5 - BiosDate in misc.c
 
