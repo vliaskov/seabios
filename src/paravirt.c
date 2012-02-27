@@ -305,6 +305,18 @@ u16 qemu_cfg_get_max_cpus(void)
     return cnt;
 }
 
+s16 qemu_cfg_get_hplug_cpus(void)
+{
+    s16 cnt;
+
+    if (!qemu_cfg_present)
+        return 0;
+
+    qemu_cfg_read_entry(&cnt, QEMU_CFG_HPLUG_CPUS, sizeof(cnt));
+
+    return cnt;
+}
+
 static QemuCfgFile LastFile;
 
 static u32

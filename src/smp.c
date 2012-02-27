@@ -114,8 +114,9 @@ smp_probe(void)
     if (CONFIG_COREBOOT) {
         msleep(10);
     } else {
-        u8 cmos_smp_count = inb_cmos(CMOS_BIOS_SMP_COUNT);
-        while (cmos_smp_count + 1 != readl(&CountCPUs))
+        s8 cmos_smp_count = (s8)inb_cmos(CMOS_BIOS_SMP_COUNT);
+        s8 HotPlugCPUs = (s8)qemu_cfg_get_hplug_cpus();
+        while ( (u8) (cmos_smp_count + HotPlugCPUs + 1) != readl(&CountCPUs))
             yield();
     }
 
