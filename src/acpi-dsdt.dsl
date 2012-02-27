@@ -787,9 +787,15 @@ DefinitionBlock (
             Store(DerefOf(Index(CPON, Arg0)), Local0)
             If (Local0) { Return(0xF) } Else { Return(0x0) }
         }
+        /* CPU eject notify method */
+        OperationRegion(PREJ, SystemIO, 0xaf20, 32)
+        Field (PREJ, ByteAcc, NoLock, Preserve)
+        {
+            PRE, 256
+        }
         Method (CPEJ, 2, NotSerialized) {
             // _EJ0 method - eject callback
-            Sleep(200)
+            Store(ShiftLeft(1, Arg0), PRE)
         }
 
         /* CPU hotplug notify method */
