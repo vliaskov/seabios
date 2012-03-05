@@ -10,7 +10,9 @@
 DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
 
-build: build-stamp
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
 build-stamp:
 	dh_testdir
 	$(MAKE) src/acpi-dsdt.hex
@@ -23,17 +25,17 @@ clean:
 	dh_testdir
 	dh_testroot
 	rm -f build-stamp
-	$(MAKE) clean
+	$(MAKE) distclean
 	! [ -f optionrom/Makefile ] || $(MAKE) -C optionrom clean
-	rm -f $(CURDIR)/src/acpi-dsdt.aml
-	rm -f $(CURDIR)/src/acpi-dsdt.hex
-	rm -f $(CURDIR)/tools/*pyc
+	rm -f src/acpi-dsdt.aml
+	rm -f src/acpi-dsdt.hex
+	rm -f tools/*pyc
 	dh_clean
 
 install: build
 	dh_testdir
 	dh_testroot
-	dh_clean -k
+	dh_prep
 	dh_installdirs
 	dh_install
 

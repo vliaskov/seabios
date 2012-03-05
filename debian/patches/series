@@ -3,6 +3,6 @@
 02_optionrom_linuxboot.patch
 03_optionrom_multiboot.patch
 04_optionrom_vapic.patch
-05-Fix-struct-bregs-it-shouldn-t-have-multiple-members.patch
 pb_hotplug_allcpu_fixhang.patch
 pb_hotplug_cpusrat.patch
+pb_hotunplug_acpi_ej0.patch

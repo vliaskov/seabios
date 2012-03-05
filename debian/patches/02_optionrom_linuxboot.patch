@@ -1,6 +1,10 @@
---- /dev/null
-+++ b/optionrom/linuxboot.S
-@@ -0,0 +1,137 @@
+taken from qemu commit 75b9f69057b166876a0c33d5fd86aa59ccfd3812
+
+Index: seabios/optionrom/linuxboot.S
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ seabios/optionrom/linuxboot.S	2011-11-24 15:54:49.277716273 -0800
+@@ -0,0 +1,139 @@
 +/*
 + * Linux Boot Option ROM
 + *
@@ -24,6 +28,8 @@
 + */
 +
 +#include "optionrom.h"
++
++#define BOOT_ROM_PRODUCT "Linux loader"
 +
 +BOOT_ROM_START
 +

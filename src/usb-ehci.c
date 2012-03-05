@@ -16,17 +16,12 @@
 #include "usb-uhci.h" // init_uhci
 #include "usb-ohci.h" // init_ohci
 
-struct companion_s {
-    u16 bdf;
-    u16 type;
-};
-
 struct usb_ehci_s {
     struct usb_s usb;
     struct ehci_caps *caps;
     struct ehci_regs *regs;
     struct ehci_qh *async_qh;
-    struct companion_s companion[8];
+    struct pci_device *companion[8];
     int checkports;
     int legacycount;
 };
@@ -52,13 +47,17 @@ ehci_note_port(struct usb_ehci_s *cntl)
     // Start companion controllers.
     int i;
     for (i=0; i<ARRAY_SIZE(cntl->companion); i++) {
-        u16 type = cntl->companion[i].type;
-        if (type == USB_TYPE_UHCI)
-            uhci_init(cntl->companion[i].bdf, cntl->usb.busid + i);
-        else if (type == USB_TYPE_OHCI)
-            ohci_init(cntl->companion[i].bdf, cntl->usb.busid + i);
-        else
-            return;
+        struct pci_device *pci = cntl->companion[i];
+        if (!pci)
+            break;
+
+        // ohci/uhci_init call pci_config_XXX - don't run from irq handler.
+        wait_preempt();
+
+        if (pci_classprog(pci) == PCI_CLASS_SERIAL_USB_UHCI)
+            uhci_init(pci, cntl->usb.busid + i);
+        else if (pci_classprog(pci) == PCI_CLASS_SERIAL_USB_OHCI)
+            ohci_init(pci, cntl->usb.busid + i);
     }
 }
 
@@ -249,11 +248,12 @@ fail:
 }
 
 int
-ehci_init(u16 bdf, int busid, int compbdf)
+ehci_init(struct pci_device *pci, int busid, struct pci_device *comppci)
 {
     if (! CONFIG_USB_EHCI)
         return -1;
 
+    u16 bdf = pci->bdf;
     u32 baseaddr = pci_config_readl(bdf, PCI_BASE_ADDRESS_0);
     struct ehci_caps *caps = (void*)(baseaddr & PCI_BASE_ADDRESS_MEM_MASK);
     u32 hcc_params = readl(&caps->hccparams);
@@ -263,8 +263,13 @@ ehci_init(u16 bdf, int busid, int compbdf)
     }
 
     struct usb_ehci_s *cntl = malloc_tmphigh(sizeof(*cntl));
+    if (!cntl) {
+        warn_noalloc();
+        return -1;
+    }
     memset(cntl, 0, sizeof(*cntl));
     cntl->usb.busid = busid;
+    cntl->usb.pci = pci;
     cntl->usb.type = USB_TYPE_EHCI;
     cntl->caps = caps;
     cntl->regs = (void*)caps + readb(&caps->caplength);
@@ -279,21 +284,14 @@ ehci_init(u16 bdf, int busid, int compbdf)
 
     // Find companion controllers.
     int count = 0;
-    int max = pci_to_bdf(pci_bdf_to_bus(bdf) + 1, 0, 0);
     for (;;) {
-        if (compbdf < 0 || compbdf >= bdf)
+        if (!comppci || comppci == pci)
             break;
-        u32 code = pci_config_readl(compbdf, PCI_CLASS_REVISION) >> 8;
-        if (code == PCI_CLASS_SERIAL_USB_UHCI) {
-            cntl->companion[count].bdf = compbdf;
-            cntl->companion[count].type = USB_TYPE_UHCI;
-            count++;
-        } else if (code == PCI_CLASS_SERIAL_USB_OHCI) {
-            cntl->companion[count].bdf = compbdf;
-            cntl->companion[count].type = USB_TYPE_OHCI;
-            count++;
-        }
-        compbdf = pci_next(compbdf+1, &max);
+        if (pci_classprog(comppci) == PCI_CLASS_SERIAL_USB_UHCI)
+            cntl->companion[count++] = comppci;
+        else if (pci_classprog(comppci) == PCI_CLASS_SERIAL_USB_OHCI)
+            cntl->companion[count++] = comppci;
+        comppci = comppci->next;
     }
 
     run_thread(configure_ehci, cntl);

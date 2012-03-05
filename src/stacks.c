@@ -24,11 +24,6 @@ struct thread_info VAR32FLATVISIBLE MainThread = {
  * Low level helpers
  ****************************************************************/
 
-static inline u32 getcr0(void) {
-    u32 cr0;
-    asm("movl %%cr0, %0" : "=r"(cr0));
-    return cr0;
-}
 static inline void sgdt(struct descloc_s *desc) {
     asm("sgdtl %0" : "=m"(*desc));
 }
@@ -37,14 +32,14 @@ static inline void lgdt(struct descloc_s *desc) {
 }
 
 // Call a 32bit SeaBIOS function from a 16bit SeaBIOS function.
-static inline int
-call32(void *func)
+u32 VISIBLE16
+call32(void *func, u32 eax, u32 errret)
 {
     ASSERT16();
     u32 cr0 = getcr0();
     if (cr0 & CR0_PE)
         // Called in 16bit protected mode?!
-        return -1;
+        return errret;
 
     // Backup cmos index register and disable nmi
     u8 cmosindex = inb(PORT_CMOS_INDEX);
@@ -63,14 +58,14 @@ call32(void *func)
         "  movl %%esp, %1\n"
         "  shll $4, %0\n"
         "  addl %0, %%esp\n"
-        "  movl %%ss, %0\n"
+        "  shrl $4, %0\n"
 
         // Transition to 32bit mode, call func, return to 16bit
-        "  pushl $(" __stringify(BUILD_BIOS_ADDR) " + 1f)\n"
+        "  movl $(" __stringify(BUILD_BIOS_ADDR) " + 1f), %%edx\n"
         "  jmp transition32\n"
         "  .code32\n"
-        "1:calll *%2\n"
-        "  pushl $2f\n"
+        "1:calll *%3\n"
+        "  movl $2f, %%edx\n"
         "  jmp transition16big\n"
 
         // Restore ds/ss/esp
@@ -78,9 +73,9 @@ call32(void *func)
         "2:movl %0, %%ds\n"
         "  movl %0, %%ss\n"
         "  movl %1, %%esp\n"
-        : "=&r" (bkup_ss), "=&r" (bkup_esp)
+        : "=&r" (bkup_ss), "=&r" (bkup_esp), "+a" (eax)
         : "r" (func)
-        : "eax", "ecx", "edx", "cc", "memory");
+        : "ecx", "edx", "cc", "memory");
 
     // Restore gdt and fs/gs
     lgdt(&gdt);
@@ -90,7 +85,7 @@ call32(void *func)
     // Restore cmos index register
     outb(cmosindex, PORT_CMOS_INDEX);
     inb(PORT_CMOS_DATA);
-    return 0;
+    return eax;
 }
 
 // 16bit trampoline for enabling irqs from 32bit mode.
@@ -373,8 +368,6 @@ wait_preempt(void)
     return 1;
 }
 
-extern void yield_preempt(void);
-#if MODESEGMENT == 0
 // Try to execute 32bit threads.
 void VISIBLE32INIT
 yield_preempt(void)
@@ -382,7 +375,6 @@ yield_preempt(void)
     PreemptCount++;
     switch_next(&MainThread);
 }
-#endif
 
 // 16bit code that checks if threads are pending and executes them if so.
 void
@@ -393,5 +385,6 @@ check_preempt(void)
         || GET_FLATPTR(MainThread.next) == &MainThread)
         return;
 
-    call32(yield_preempt);
+    extern void _cfunc32flat_yield_preempt(void);
+    call32(_cfunc32flat_yield_preempt, 0, 0);
 }

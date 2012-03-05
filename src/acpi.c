@@ -7,12 +7,11 @@
 
 #include "acpi.h" // struct rsdp_descriptor
 #include "util.h" // memcpy
-#include "pci.h" // pci_find_device
+#include "pci.h" // pci_find_init_device
 #include "biosvar.h" // GET_EBDA
 #include "pci_ids.h" // PCI_VENDOR_ID_INTEL
 #include "pci_regs.h" // PCI_INTERRUPT_LINE
 #include "paravirt.h"
-#include "dev-i440fx.h" // piix4_fadt_init
 
 /****************************************************/
 /* ACPI tables init */
@@ -157,7 +156,9 @@ struct acpi_20_hpet {
     u16           min_tick;
     u8            page_protect;
 } PACKED;
-#define ACPI_HPET_ADDRESS 0xFED00000UL
+
+#define HPET_ID         0x000
+#define HPET_PERIOD     0x004
 
 /*
  * SRAT (NUMA topology description) table
@@ -206,11 +207,25 @@ build_header(struct acpi_table_header *h, u32 sig, int len, u8 rev)
     h->revision = rev;
     memcpy(h->oem_id, CONFIG_APPNAME6, 6);
     memcpy(h->oem_table_id, CONFIG_APPNAME4, 4);
-    memcpy(h->asl_compiler_id, CONFIG_APPNAME4, 4);
     memcpy(h->oem_table_id + 4, (void*)&sig, 4);
     h->oem_revision = cpu_to_le32(1);
+    memcpy(h->asl_compiler_id, CONFIG_APPNAME4, 4);
     h->asl_compiler_revision = cpu_to_le32(1);
     h->checksum -= checksum(h, len);
+}
+
+#define PIIX4_ACPI_ENABLE       0xf1
+#define PIIX4_ACPI_DISABLE      0xf0
+#define PIIX4_GPE0_BLK          0xafe0
+#define PIIX4_GPE0_BLK_LEN      4
+
+static void piix4_fadt_init(struct pci_device *pci, void *arg)
+{
+    struct fadt_descriptor_rev1 *fadt = arg;
+    fadt->acpi_enable = PIIX4_ACPI_ENABLE;
+    fadt->acpi_disable = PIIX4_ACPI_DISABLE;
+    fadt->gpe0_blk = cpu_to_le32(PIIX4_GPE0_BLK);
+    fadt->gpe0_blk_len = PIIX4_GPE0_BLK_LEN;
 }
 
 static const struct pci_device_id fadt_init_tbl[] = {
@@ -221,8 +236,8 @@ static const struct pci_device_id fadt_init_tbl[] = {
     PCI_DEVICE_END
 };
 
-static void*
-build_fadt(int bdf)
+static void *
+build_fadt(struct pci_device *pci)
 {
     struct fadt_descriptor_rev1 *fadt = malloc_high(sizeof(*fadt));
     struct facs_descriptor_rev1 *facs = memalign_high(64, sizeof(*facs));
@@ -247,7 +262,7 @@ build_fadt(int bdf)
     fadt->dsdt = cpu_to_le32((u32)dsdt);
     fadt->model = 1;
     fadt->reserved1 = 0;
-    int pm_sci_int = pci_config_readb(bdf, PCI_INTERRUPT_LINE);
+    int pm_sci_int = pci_config_readb(pci->bdf, PCI_INTERRUPT_LINE);
     fadt->sci_int = cpu_to_le16(pm_sci_int);
     fadt->smi_cmd = cpu_to_le32(PORT_SMI_CMD);
     fadt->pm1a_evt_blk = cpu_to_le32(PORT_ACPI_PM_BASE);
@@ -258,9 +273,9 @@ build_fadt(int bdf)
     fadt->pm_tmr_len = 4;
     fadt->plvl2_lat = cpu_to_le16(0xfff); // C2 state not supported
     fadt->plvl3_lat = cpu_to_le16(0xfff); // C3 state not supported
-    pci_init_device(fadt_init_tbl, bdf, fadt);
-    /* WBINVD + PROC_C1 + SLP_BUTTON + FIX_RTC */
-    fadt->flags = cpu_to_le32((1 << 0) | (1 << 2) | (1 << 5) | (1 << 6));
+    pci_init_device(fadt_init_tbl, pci, fadt);
+    /* WBINVD + PROC_C1 + SLP_BUTTON + FIX_RTC + RTC_S4 */
+    fadt->flags = cpu_to_le32((1 << 0) | (1 << 2) | (1 << 5) | (1 << 6) | (1 << 7));
 
     build_header((void*)fadt, FACP_SIGNATURE, sizeof(*fadt), 1);
 
@@ -447,11 +462,20 @@ build_ssdt(void)
     return ssdt;
 }
 
-#define HPET_SIGNATURE 0x54455048 //HPET
+#define HPET_SIGNATURE 0x54455048 // HPET
 static void*
 build_hpet(void)
 {
-    struct acpi_20_hpet *hpet = malloc_high(sizeof(*hpet));
+    struct acpi_20_hpet *hpet;
+    const void *hpet_base = (void *)BUILD_HPET_ADDRESS;
+    u32 hpet_vendor = readl(hpet_base + HPET_ID) >> 16;
+    u32 hpet_period = readl(hpet_base + HPET_PERIOD);
+
+    if (hpet_vendor == 0 || hpet_vendor == 0xffff ||
+        hpet_period == 0 || hpet_period > 100000000)
+        return NULL;
+
+    hpet = malloc_high(sizeof(*hpet));
     if (!hpet) {
         warn_noalloc();
         return NULL;
@@ -462,7 +486,7 @@ build_hpet(void)
      * emulated hpet
      */
     hpet->timer_block_id = cpu_to_le32(0x8086a201);
-    hpet->addr.address = cpu_to_le32(ACPI_HPET_ADDRESS);
+    hpet->addr.address = cpu_to_le32(BUILD_HPET_ADDRESS);
     build_header((void*)hpet, HPET_SIGNATURE, sizeof(*hpet), 1);
 
     return hpet;
@@ -474,7 +498,7 @@ acpi_build_srat_memory(struct srat_memory_affinity *numamem,
 {
     numamem->type = SRAT_MEMORY;
     numamem->length = sizeof(*numamem);
-    memset (numamem->proximity, 0 ,4);
+    memset(numamem->proximity, 0 ,4);
     numamem->proximity[0] = node;
     numamem->flags = cpu_to_le32(!!enabled);
     numamem->base_addr_low = base & 0xFFFFFFFF;
@@ -483,7 +507,7 @@ acpi_build_srat_memory(struct srat_memory_affinity *numamem,
     numamem->length_high = len >> 32;
 }
 
-#define SRAT_SIGNATURE 0x54415253 //HPET
+#define SRAT_SIGNATURE 0x54415253 // SRAT
 static void *
 build_srat(void)
 {
@@ -598,18 +622,12 @@ acpi_bios_init(void)
     dprintf(3, "init ACPI tables\n");
 
     // This code is hardcoded for PIIX4 Power Management device.
-    int bdf = pci_find_init_device(acpi_find_tbl, NULL);
-    if (bdf < 0)
+    struct pci_device *pci = pci_find_init_device(acpi_find_tbl, NULL);
+    if (!pci)
         // Device not found
         return;
 
-    // Create initial rsdt table
-    struct rsdp_descriptor *rsdp = malloc_fseg(sizeof(*rsdp));
-    if (!rsdp) {
-        warn_noalloc();
-        return;
-    }
-
+    // Build ACPI tables
     u32 tables[MAX_ACPI_TABLES], tbl_idx = 0;
 
 #define ACPI_INIT_TABLE(X)                                   \
@@ -619,8 +637,7 @@ acpi_bios_init(void)
             tbl_idx++;                                       \
     } while(0)
 
-    // Add tables
-    ACPI_INIT_TABLE(build_fadt(bdf));
+    ACPI_INIT_TABLE(build_fadt(pci));
     ACPI_INIT_TABLE(build_ssdt());
     ACPI_INIT_TABLE(build_madt());
     ACPI_INIT_TABLE(build_hpet());
@@ -628,7 +645,7 @@ acpi_bios_init(void)
 
     u16 i, external_tables = qemu_cfg_acpi_additional_tables();
 
-    for(i = 0; i < external_tables; i++) {
+    for (i = 0; i < external_tables; i++) {
         u16 len = qemu_cfg_next_acpi_table_len();
         void *addr = malloc_high(len);
         if (!addr) {
@@ -642,20 +659,24 @@ acpi_bios_init(void)
         }
     }
 
+    // Build final rsdt table
     struct rsdt_descriptor_rev1 *rsdt;
     size_t rsdt_len = sizeof(*rsdt) + sizeof(u32) * tbl_idx;
     rsdt = malloc_high(rsdt_len);
-
     if (!rsdt) {
         warn_noalloc();
         return;
     }
     memset(rsdt, 0, rsdt_len);
     memcpy(rsdt->table_offset_entry, tables, sizeof(u32) * tbl_idx);
-
     build_header((void*)rsdt, RSDT_SIGNATURE, rsdt_len, 1);
 
     // Build rsdp pointer table
+    struct rsdp_descriptor *rsdp = malloc_fseg(sizeof(*rsdp));
+    if (!rsdp) {
+        warn_noalloc();
+        return;
+    }
     memset(rsdp, 0, sizeof(*rsdp));
     rsdp->signature = RSDP_SIGNATURE;
     memcpy(rsdp->oem_id, CONFIG_APPNAME6, 6);
