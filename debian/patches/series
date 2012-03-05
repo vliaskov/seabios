@@ -5,3 +5,4 @@
 04_optionrom_vapic.patch
 pb_hotplug_allcpu_fixhang.patch
 pb_hotplug_cpusrat.patch
+pb_hotunplug_acpi_ej0.patch
