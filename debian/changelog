@@ -1,4 +1,4 @@
-seabios (1.6.3-1) experimental; urgency=low
+seabios (1.6.3-1) unstable; urgency=low
 
   [ Michael Tokarev ]
   * New upstream release (1.6.3, jumped from 0.6.2).
