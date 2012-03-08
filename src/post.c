@@ -12,6 +12,7 @@
 #include "biosvar.h" // struct bios_data_area_s
 #include "disk.h" // floppy_drive_setup
 #include "ata.h" // ata_setup
+#include "ahci.h" // ahci_setup
 #include "memmap.h" // add_e820
 #include "pic.h" // pic_setup
 #include "pci.h" // create_pirtable
@@ -22,6 +23,7 @@
 #include "usb.h" // usb_setup
 #include "smbios.h" // smbios_init
 #include "paravirt.h" // qemu_cfg_port_probe
+#include "xen.h" // xen_probe_hvm_info
 #include "ps2port.h" // ps2port_setup
 #include "virtio-blk.h" // virtio_blk_setup
 
@@ -100,6 +102,8 @@ ram_probe(void)
     dprintf(3, "Find memory size\n");
     if (CONFIG_COREBOOT) {
         coreboot_setup();
+    } else if (usingXen()) {
+	xen_setup();
     } else {
         // On emulators, get memory size from nvram.
         u32 rs = ((inb_cmos(CMOS_MEM_EXTMEM2_LOW) << 16)
@@ -157,6 +161,10 @@ init_bios_tables(void)
         coreboot_copy_biostable();
         return;
     }
+    if (usingXen()) {
+	xen_copy_biostables();
+	return;
+    }
 
     create_pirtable();
 
@@ -178,6 +186,8 @@ init_hw(void)
 
     floppy_setup();
     ata_setup();
+    ahci_setup();
+    cbfs_payload_setup();
     ramdisk_setup();
     virtio_blk_setup();
 }
@@ -200,6 +210,9 @@ startBoot(void)
 static void
 maininit(void)
 {
+    // Running at new code address - do code relocation fixups
+    malloc_fixupreloc();
+
     // Setup ivt/bda/ebda
     init_ivt();
     init_bda();
@@ -215,6 +228,9 @@ maininit(void)
     // Initialize pci
     pci_setup();
     smm_init();
+
+    // Setup Xen hypercalls
+    xen_init_hypercalls();
 
     // Initialize internal tables
     boot_setup();
@@ -267,7 +283,7 @@ maininit(void)
 
 
 /****************************************************************
- * Code relocation
+ * POST entry and code relocation
  ****************************************************************/
 
 // Update given relocs for the code at 'dest' with a given 'delta'
@@ -279,8 +295,7 @@ updateRelocs(void *dest, u32 *rstart, u32 *rend, u32 delta)
         *((u32*)(dest + *reloc)) += delta;
 }
 
-// Start of Power On Self Test - the BIOS initilization.  This
-// function sets up for and attempts relocation of the init code.
+// Relocate init code and then call maininit() at new address.
 static void
 reloc_init(void)
 {
@@ -318,68 +333,45 @@ reloc_init(void)
     func();
 }
 
-// Start of Power On Self Test (POST) - the BIOS initilization phase.
-// This function sets up for and attempts relocation of the init code.
+// Setup for code relocation and then call reloc_init
 void VISIBLE32INIT
-post(void)
+dopost(void)
 {
+    HaveRunPost = 1;
+
     // Detect ram and setup internal malloc.
     qemu_cfg_port_probe();
     ram_probe();
     malloc_setup();
 
+    // Relocate initialization code and call maininit().
     reloc_init();
 }
 
-
-/****************************************************************
- * POST entry point
- ****************************************************************/
-
-static int HaveRunPost;
-
-// Attempt to invoke a hard-reboot.
-static void
-tryReboot(void)
-{
-    dprintf(1, "Attempting a hard reboot\n");
-
-    // Setup for reset on qemu.
-    if (! CONFIG_COREBOOT) {
-        qemu_prep_reset();
-        if (HaveRunPost)
-            apm_shutdown();
-    }
-
-    // Try keyboard controller reboot.
-    i8042_reboot();
-
-    // Try PCI 0xcf9 reboot
-    pci_reboot();
-
-    // Try triple fault
-    asm volatile("int3");
-
-    panic("Could not reboot");
-}
-
-// 32-bit entry point.
+// Entry point for Power On Self Test (POST) - the BIOS initilization
+// phase.  This function makes the memory at 0xc0000-0xfffff
+// read/writable and then calls dopost().
 void VISIBLE32FLAT
-_start(void)
+handle_post(void)
 {
-    init_dma();
-
     debug_serial_setup();
     dprintf(1, "Start bios (version %s)\n", VERSION);
 
-    if (HaveRunPost)
-        // This is a soft reboot - invoke a hard reboot.
-        tryReboot();
+    // Enable CPU caching
+    setcr0(getcr0() & ~(CR0_CD|CR0_NW));
+
+    // Clear CMOS reboot flag.
+    outb_cmos(0, CMOS_RESET_CODE);
+
+    // Make sure legacy DMA isn't running.
+    init_dma();
+
+    // Check if we are running under Xen.
+    xen_probe();
 
     // Allow writes to modify bios area (0xf0000)
     make_bios_writable();
-    HaveRunPost = 1;
 
-    // Perform main setup code.
-    post();
+    // Now that memory is read/writable - start post process.
+    dopost();
 }

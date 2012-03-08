@@ -209,15 +209,16 @@ def outXRefs(sections):
         for reloc in section.relocs:
             symbol = reloc.symbol
             if (symbol.section is None
-                or symbol.section.fileid == section.fileid
-                or symbol.name in xrefs):
+                or (symbol.section.fileid == section.fileid
+                    and symbol.name == reloc.symbolname)
+                or reloc.symbolname in xrefs):
                 continue
-            xrefs[symbol.name] = 1
+            xrefs[reloc.symbolname] = 1
             addr = symbol.section.finalloc + symbol.offset
             if (section.fileid == '32flat'
                 and symbol.section.fileid in ('16', '32seg')):
                 addr += BUILD_BIOS_ADDR
-            out += "%s = 0x%x ;\n" % (symbol.name, addr)
+            out += "%s = 0x%x ;\n" % (reloc.symbolname, addr)
     return out
 
 # Write LD script includes for the given sections using relative offsets
@@ -396,13 +397,29 @@ def findInit(sections):
 # Section garbage collection
 ######################################################################
 
+CFUNCPREFIX = [('_cfunc16_', 0), ('_cfunc32seg_', 1), ('_cfunc32flat_', 2)]
+
 # Find and keep the section associated with a symbol (if available).
-def keepsymbol(reloc, infos, pos):
-    symbolname = reloc.symbol.name
+def keepsymbol(reloc, infos, pos, isxref):
+    symbolname = reloc.symbolname
+    mustbecfunc = 0
+    for symprefix, needpos in CFUNCPREFIX:
+        if symbolname.startswith(symprefix):
+            if needpos != pos:
+                return -1
+            symbolname = symbolname[len(symprefix):]
+            mustbecfunc = 1
+            break
     symbol = infos[pos][1].get(symbolname)
     if (symbol is None or symbol.section is None
         or symbol.section.name.startswith('.discard.')):
         return -1
+    isdestcfunc = (symbol.section.name.startswith('.text.')
+                   and not symbol.section.name.startswith('.text.asm.'))
+    if ((mustbecfunc and not isdestcfunc)
+        or (not mustbecfunc and isdestcfunc and isxref)):
+        return -1
+
     reloc.symbol = symbol
     keepsection(symbol.section, infos, pos)
     return 0
@@ -416,14 +433,14 @@ def keepsection(section, infos, pos=0):
     section.keep = 1
     # Keep all sections that this section points to
     for reloc in section.relocs:
-        ret = keepsymbol(reloc, infos, pos)
+        ret = keepsymbol(reloc, infos, pos, 0)
         if not ret:
             continue
         # Not in primary sections - it may be a cross 16/32 reference
-        ret = keepsymbol(reloc, infos, (pos+1)%3)
+        ret = keepsymbol(reloc, infos, (pos+1)%3, 1)
         if not ret:
             continue
-        ret = keepsymbol(reloc, infos, (pos+2)%3)
+        ret = keepsymbol(reloc, infos, (pos+2)%3, 1)
         if not ret:
             continue
 
@@ -449,7 +466,7 @@ class Section:
     name = size = alignment = fileid = relocs = None
     finalloc = category = keep = None
 class Reloc:
-    offset = type = symbol = None
+    offset = type = symbolname = symbol = None
 class Symbol:
     name = offset = section = None
 
@@ -514,7 +531,17 @@ def parseObjDump(file, fileid):
                 reloc = Reloc()
                 reloc.offset = int(off, 16)
                 reloc.type = type
-                reloc.symbol = symbols[symbolname]
+                reloc.symbolname = symbolname
+                reloc.symbol = symbols.get(symbolname)
+                if reloc.symbol is None:
+                    # Some binutils (2.20.1) give section name instead
+                    # of a symbol - create a dummy symbol.
+                    reloc.symbol = symbol = Symbol()
+                    symbol.size = 0
+                    symbol.offset = 0
+                    symbol.name = symbolname
+                    symbol.section = sectionmap.get(symbolname)
+                    symbols[symbolname] = symbol
                 relocsection.relocs.append(reloc)
             except ValueError:
                 pass
@@ -541,11 +568,10 @@ def main():
     findInit(sections)
 
     # Determine the final memory locations of each kept section.
-    # locsX = [(addr, sectioninfo), ...]
     doLayout(sections)
 
     # Write out linker script files.
-    entrysym = info16[1]['post32']
+    entrysym = info16[1]['entry_elf']
     genreloc = '_reloc_abs_start' in info32flat[1]
     writeLinkerScripts(sections, entrysym, genreloc, out16, out32seg, out32flat)
 

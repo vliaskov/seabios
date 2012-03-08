@@ -6,12 +6,10 @@
 
 #include "memmap.h" // add_e820
 #include "util.h" // dprintf
-#include "pci.h" // struct pir_header
-#include "acpi.h" // struct rsdp_descriptor
-#include "mptable.h" // MPTABLE_SIGNATURE
 #include "biosvar.h" // GET_EBDA
 #include "lzmadecode.h" // LzmaDecode
 #include "smbios.h" // smbios_init
+#include "boot.h" // boot_add_cbfs
 
 
 /****************************************************************
@@ -119,6 +117,7 @@ find_cb_subtable(struct cb_header *cbh, u32 tag)
 }
 
 static struct cb_memory *CBMemTable;
+const char *CBvendor, *CBpart;
 
 // Populate max ram and e820 map info by scanning for a coreboot table.
 static void
@@ -170,11 +169,9 @@ coreboot_fill_map(void)
 
     struct cb_mainboard *cbmb = find_cb_subtable(cbh, CB_TAG_MAINBOARD);
     if (cbmb) {
-        const char *vendor = &cbmb->strings[cbmb->vendor_idx];
-        const char *part = &cbmb->strings[cbmb->part_idx];
-        dprintf(1, "Found mainboard %s %s\n", vendor, part);
-
-        vgahook_setup(vendor, part);
+        CBvendor = &cbmb->strings[cbmb->vendor_idx];
+        CBpart = &cbmb->strings[cbmb->part_idx];
+        dprintf(1, "Found mainboard %s %s\n", CBvendor, CBpart);
     }
 
     return;
@@ -193,78 +190,6 @@ fail:
  * BIOS table copying
  ****************************************************************/
 
-static void
-copy_pir(void *pos)
-{
-    struct pir_header *p = pos;
-    if (p->signature != PIR_SIGNATURE)
-        return;
-    if (PirOffset)
-        return;
-    if (p->size < sizeof(*p))
-        return;
-    if (checksum(pos, p->size) != 0)
-        return;
-    void *newpos = malloc_fseg(p->size);
-    if (!newpos) {
-        warn_noalloc();
-        return;
-    }
-    dprintf(1, "Copying PIR from %p to %p\n", pos, newpos);
-    memcpy(newpos, pos, p->size);
-    PirOffset = (u32)newpos - BUILD_BIOS_ADDR;
-}
-
-static void
-copy_mptable(void *pos)
-{
-    struct mptable_floating_s *p = pos;
-    if (p->signature != MPTABLE_SIGNATURE)
-        return;
-    if (!p->physaddr)
-        return;
-    if (checksum(pos, sizeof(*p)) != 0)
-        return;
-    u32 length = p->length * 16;
-    u16 mpclength = ((struct mptable_config_s *)p->physaddr)->length;
-    struct mptable_floating_s *newpos = malloc_fseg(length + mpclength);
-    if (!newpos) {
-        warn_noalloc();
-        return;
-    }
-    dprintf(1, "Copying MPTABLE from %p/%x to %p\n", pos, p->physaddr, newpos);
-    memcpy(newpos, pos, length);
-    newpos->physaddr = (u32)newpos + length;
-    newpos->checksum -= checksum(newpos, sizeof(*newpos));
-    memcpy((void*)newpos + length, (void*)p->physaddr, mpclength);
-}
-
-static void
-copy_acpi_rsdp(void *pos)
-{
-    if (RsdpAddr)
-        return;
-    struct rsdp_descriptor *p = pos;
-    if (p->signature != RSDP_SIGNATURE)
-        return;
-    u32 length = 20;
-    if (checksum(pos, length) != 0)
-        return;
-    if (p->revision > 1) {
-        length = p->length;
-        if (checksum(pos, length) != 0)
-            return;
-    }
-    void *newpos = malloc_fseg(length);
-    if (!newpos) {
-        warn_noalloc();
-        return;
-    }
-    dprintf(1, "Copying ACPI RSDP from %p to %p\n", pos, newpos);
-    memcpy(newpos, pos, length);
-    RsdpAddr = newpos;
-}
-
 // Attempt to find (and relocate) any standard bios tables found in a
 // given address range.
 static void
@@ -276,6 +201,7 @@ scan_tables(u32 start, u32 size)
         copy_pir(p);
         copy_mptable(p);
         copy_acpi_rsdp(p);
+        copy_smbios(p);
     }
 }
 
@@ -296,9 +222,9 @@ coreboot_copy_biostable(void)
             scan_tables(m->start, m->size);
     }
 
-    // XXX - just create dummy smbios table for now - should detect if
-    // smbios/dmi table is found from coreboot and use that instead.
-    smbios_init();
+    // XXX - create a dummy smbios table for now.
+    if (!SMBiosAddr)
+        smbios_init();
 }
 
 
@@ -320,7 +246,7 @@ ulzma(u8 *dst, u32 maxlen, const u8 *src, u32 srclen)
     u8 scratch[15980];
     int need = (LzmaGetNumProbs(&state.Properties) * sizeof(CProb));
     if (need > sizeof(scratch)) {
-        dprintf(1, "LzmaDecode need %d have %d\n", need, sizeof(scratch));
+        dprintf(1, "LzmaDecode need %d have %d\n", need, (unsigned int)sizeof(scratch));
         return -1;
     }
     state.Probs = (CProb *)scratch;
@@ -590,6 +516,21 @@ cbfs_run_payload(struct cbfs_file *file)
             break;
         }
         seg++;
+    }
+}
+
+// Register payloads in "img/" directory with boot system.
+void
+cbfs_payload_setup(void)
+{
+    struct cbfs_file *file = NULL;
+    for (;;) {
+        file = cbfs_findprefix("img/", file);
+        if (!file)
+            break;
+        const char *filename = cbfs_filename(file);
+        char *desc = znprintf(MAXDESCSIZE, "Payload [%s]", &filename[4]);
+        boot_add_cbfs(file, desc, bootprio_find_named_rom(filename, 0));
     }
 }
 

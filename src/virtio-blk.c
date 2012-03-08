@@ -13,7 +13,7 @@
 #include "biosvar.h" // GET_GLOBAL
 #include "pci_ids.h" // PCI_DEVICE_ID_VIRTIO_BLK
 #include "pci_regs.h" // PCI_VENDOR_ID
-#include "boot.h" // add_bcv_internal
+#include "boot.h" // boot_add_hd
 #include "virtio-pci.h"
 #include "virtio-ring.h"
 #include "virtio-blk.h"
@@ -97,14 +97,14 @@ process_virtio_op(struct disk_op_s *op)
 }
 
 static void
-init_virtio_blk(u16 bdf)
+init_virtio_blk(struct pci_device *pci)
 {
+    u16 bdf = pci->bdf;
     dprintf(1, "found virtio-blk at %x:%x\n", pci_bdf_to_bus(bdf),
             pci_bdf_to_dev(bdf));
-    char *desc = malloc_tmphigh(MAXDESCSIZE);
     struct virtiodrive_s *vdrive_g = malloc_fseg(sizeof(*vdrive_g));
     struct vring_virtqueue *vq = memalign_low(PAGE_SIZE, sizeof(*vq));
-    if (!vdrive_g || !desc || !vq) {
+    if (!vdrive_g || !vq) {
         warn_noalloc();
         goto fail;
     }
@@ -151,14 +151,10 @@ init_virtio_blk(u16 bdf)
     vdrive_g->drive.pchs.cylinders = cfg.cylinders;
     vdrive_g->drive.pchs.heads = cfg.heads;
     vdrive_g->drive.pchs.spt = cfg.sectors;
+    char *desc = znprintf(MAXDESCSIZE, "Virtio disk PCI:%x:%x",
+                          pci_bdf_to_bus(bdf), pci_bdf_to_dev(bdf));
 
-    setup_translation(&vdrive_g->drive);
-    add_bcv_internal(&vdrive_g->drive);
-
-    snprintf(desc, MAXDESCSIZE, "Virtio disk PCI:%x:%x",
-             pci_bdf_to_bus(bdf), pci_bdf_to_dev(bdf));
-
-    vdrive_g->drive.desc = desc;
+    boot_add_hd(&vdrive_g->drive, desc, bootprio_find_pci_device(pci));
 
     vp_set_status(ioaddr, VIRTIO_CONFIG_S_ACKNOWLEDGE |
                   VIRTIO_CONFIG_S_DRIVER | VIRTIO_CONFIG_S_DRIVER_OK);
@@ -166,7 +162,6 @@ init_virtio_blk(u16 bdf)
 
 fail:
     free(vdrive_g);
-    free(desc);
     free(vq);
 }
 
@@ -179,12 +174,11 @@ virtio_blk_setup(void)
 
     dprintf(3, "init virtio-blk\n");
 
-    int bdf, max;
-    u32 id = PCI_VENDOR_ID_REDHAT_QUMRANET | (PCI_DEVICE_ID_VIRTIO_BLK << 16);
-    foreachpci(bdf, max) {
-        u32 v = pci_config_readl(bdf, PCI_VENDOR_ID);
-        if (v != id)
+    struct pci_device *pci;
+    foreachpci(pci) {
+        if (pci->vendor != PCI_VENDOR_ID_REDHAT_QUMRANET
+            || pci->device != PCI_DEVICE_ID_VIRTIO_BLK)
             continue;
-        init_virtio_blk(bdf);
+        init_virtio_blk(pci);
     }
 }

@@ -61,6 +61,15 @@ static inline void cpuid(u32 index, u32 *eax, u32 *ebx, u32 *ecx, u32 *edx)
         : "0" (index));
 }
 
+static inline u32 getcr0(void) {
+    u32 cr0;
+    asm("movl %%cr0, %0" : "=r"(cr0));
+    return cr0;
+}
+static inline void setcr0(u32 cr0) {
+    asm("movl %0, %%cr0" : : "r"(cr0));
+}
+
 static inline u64 rdmsr(u32 index)
 {
     u64 ret;
@@ -198,6 +207,7 @@ int strcmp(const char *s1, const char *s2);
 inline void memset_far(u16 d_seg, void *d_far, u8 c, size_t len);
 inline void memset16_far(u16 d_seg, void *d_far, u16 c, size_t len);
 void *memset(void *s, int c, size_t n);
+void memset_fl(void *ptr, u8 val, size_t size);
 inline void memcpy_far(u16 d_seg, void *d_far
                        , u16 s_seg, const void *s_far, size_t len);
 void memcpy_fl(void *d_fl, const void *s_fl, size_t len);
@@ -208,11 +218,15 @@ void *memcpy(void *d1, const void *s1, size_t len);
 void iomemcpy(void *d, const void *s, u32 len);
 void *memmove(void *d, const void *s, size_t len);
 char *strtcpy(char *dest, const char *src, size_t len);
+char *strchr(const char *s, int c);
+void nullTrailingSpace(char *buf);
 int get_keystroke(int msec);
 
 // stacks.c
+u32 call32(void *func, u32 eax, u32 errret);
 inline u32 stack_hop(u32 eax, u32 edx, void *func);
 extern struct thread_info MainThread;
+extern int CanPreempt;
 struct thread_info *getCurThread(void);
 void yield(void);
 void wait_irq(void);
@@ -234,6 +248,8 @@ void printf(const char *fmt, ...)
     __attribute__ ((format (printf, 1, 2)));
 int snprintf(char *str, size_t size, const char *fmt, ...)
     __attribute__ ((format (printf, 3, 4)));
+char * znprintf(size_t size, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
 void __dprintf(const char *fmt, ...)
     __attribute__ ((format (printf, 1, 2)));
 void __debug_enter(struct bregs *regs, const char *fname);
@@ -336,17 +352,10 @@ void bios32_setup(void);
 // shadow.c
 void make_bios_writable(void);
 void make_bios_readonly(void);
-void make_bios_writable_intel(u16 bdf, u32 pam0);
-void make_bios_readonly_intel(u16 bdf, u32 pam0);
 void qemu_prep_reset(void);
-
-// smm.c
-void smm_save_and_copy(void);
-void smm_relocate_and_restore(void);
 
 // pciinit.c
 extern const u8 pci_irqs[4];
-void pci_bios_allocate_regions(u16 bdf, void *arg);
 void pci_setup(void);
 
 // smm.c
@@ -359,6 +368,7 @@ void wrmsr_smp(u32 index, u64 val);
 void smp_probe(void);
 
 // coreboot.c
+extern const char *CBvendor, *CBpart;
 struct cbfs_file;
 struct cbfs_file *cbfs_finddatafile(const char *fname);
 struct cbfs_file *cbfs_findprefix(const char *prefix, struct cbfs_file *last);
@@ -367,12 +377,19 @@ const char *cbfs_filename(struct cbfs_file *file);
 int cbfs_copyfile(struct cbfs_file *file, void *dst, u32 maxlen);
 void cbfs_run_payload(struct cbfs_file *file);
 void coreboot_copy_biostable(void);
+void cbfs_payload_setup(void);
 void coreboot_setup(void);
 
+// biostable.c
+void copy_pir(void *pos);
+void copy_mptable(void *pos);
+void copy_acpi_rsdp(void *pos);
+void copy_smbios(void *pos);
+
 // vgahooks.c
-extern int VGAbdf;
 void handle_155f(struct bregs *regs);
-void vgahook_setup(const char *vendor, const char *part);
+struct pci_device;
+void vgahook_setup(struct pci_device *pci);
 
 // optionroms.c
 void call_bcv(u16 seg, u16 ip);
@@ -380,6 +397,7 @@ void optionrom_setup(void);
 void vga_setup(void);
 void s3_resume_vga_init(void);
 extern u32 RomEnd;
+extern int ScreenAndDebug;
 
 // bootsplash.c
 void enable_vga_console(void);
@@ -387,6 +405,7 @@ void enable_bootsplash(void);
 void disable_bootsplash(void);
 
 // resume.c
+extern int HaveRunPost;
 void init_dma(void);
 
 // pnpbios.c
@@ -397,6 +416,7 @@ void pnp_setup(void);
 // pmm.c
 extern struct zone_s ZoneLow, ZoneHigh, ZoneFSeg, ZoneTmpLow, ZoneTmpHigh;
 void malloc_setup(void);
+void malloc_fixupreloc(void);
 void malloc_finalize(void);
 void *pmm_malloc(struct zone_s *zone, u32 handle, u32 size, u32 align);
 int pmm_free(void *data);

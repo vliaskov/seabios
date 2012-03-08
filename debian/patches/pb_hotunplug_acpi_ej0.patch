@@ -1,0 +1,37 @@
+From aea91fc4aad6c28690c815ba4cb20086992274ee Mon Sep 17 00:00:00 2001
+From: Vasilis Liaskovitis <vasilis.liaskovitis@profitbricks.com>
+Date: Fri, 20 Jan 2012 15:35:05 +0100
+Subject: [PATCH v2 1/4][SeaBios] Add bitmap for CPU EJ0 callback
+
+Add bitmap for CPU EJ0 callback and write to it on a cpu _EJ0 callback. Remove
+Sleep() call.
+
+Signed-off-by: Vasilis Liaskovitis <vasilis.liaskovitis@profitbricks.com>
+---
+ src/acpi-dsdt.dsl |    8 +++++++-
+ 1 files changed, 7 insertions(+), 1 deletions(-)
+
+diff --git a/src/acpi-dsdt.dsl b/src/acpi-dsdt.dsl
+index 7082b65..5138c2a 100644
+--- a/src/acpi-dsdt.dsl
++++ b/src/acpi-dsdt.dsl
+@@ -650,9 +650,15 @@ DefinitionBlock (
+             Store(DerefOf(Index(CPON, Arg0)), Local0)
+             If (Local0) { Return(0xF) } Else { Return(0x0) }
+         }
++        /* CPU eject notify method */
++        OperationRegion(PREJ, SystemIO, 0xaf20, 32)
++        Field (PREJ, ByteAcc, NoLock, Preserve)
++        {
++            PRE, 256
++        }
+         Method (CPEJ, 2, NotSerialized) {
+             // _EJ0 method - eject callback
+-            Sleep(200)
++            Store(ShiftLeft(1, Arg0), PRE)
+         }
+ 
+         /* CPU hotplug notify method */
+-- 
+1.7.7.3
+

@@ -7,6 +7,7 @@
 // Information on a USB end point.
 struct usb_pipe {
     struct usb_s *cntl;
+    u64 path;
     u8 type;
     u8 ep;
     u8 devaddr;
@@ -20,6 +21,7 @@ struct usb_pipe {
 struct usb_s {
     struct usb_pipe *defaultpipe;
     struct mutex_s resetlock;
+    struct pci_device *pci;
     int busid;
     u8 type;
     u8 maxaddr;
