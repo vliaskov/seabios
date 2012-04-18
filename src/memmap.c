@@ -131,6 +131,21 @@ add_e820(u64 start, u64 size, u32 type)
     //dump_map();
 }
 
+// Check if an e820 entry exists that covers the memory range
+// [start, start+size) with same type as type.
+int
+find_e820(u64 start, u64 size, u32 type)
+{
+    int i;
+    for (i=0; i<e820_count; i++) {
+        struct e820entry *e = &e820_list[i];
+        if ((e->start <= start) && (e->size >= (size + start - e->start)) &&
+            (e->type == type))
+            return 1;
+    }
+    return 0;
+}
+
 // Report on final memory locations.
 void
 memmap_finalize(void)

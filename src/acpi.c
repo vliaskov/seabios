@@ -601,7 +601,11 @@ build_memssdt(void)
     for (i = 0; i < nb_memdevs; i++) {
         mem_base = (((u64)(entry->base_addr_high) << 32 )| entry->base_addr_low);
         mem_len = (((u64)(entry->length_high) << 32 )| entry->length_low);
-        *(ssdt_ptr++) = 0x00;
+        if (find_e820(mem_base, mem_len, E820_RAM)) {
+            *(ssdt_ptr++) = 0x01;
+        }
+        else
+            *(ssdt_ptr++) = 0x00;
         entry++;
     }
     build_header((void*)ssdt, SSDT_SIGNATURE, ssdt_ptr - ssdt, 1);
