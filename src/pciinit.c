@@ -382,28 +382,25 @@ static u64 pci_region_sum(struct pci_region *r)
     while (entry) {
         sum += entry->size;
         entry = entry->next;
-   }
-   return sum;
+    }
+    return sum;
 }
 
 static void pci_region_migrate_64bit_entries(struct pci_region *from,
                                              struct pci_region *to)
 {
-    struct pci_region_entry **pprev = &from->list;
-    struct pci_region_entry **last = &to->list;
-    while(*pprev) {
-        if ((*pprev)->is64) {
-            struct pci_region_entry *entry;
-            entry = *pprev;
-            /* Delete the entry and move next */
-            *pprev = (*pprev)->next;
-            /* Add entry at tail to keep a sorted order */
-            entry->next = NULL;
-            *last = entry;
-            last = &entry->next;
+    struct pci_region_entry **pprev = &from->list, **last = &to->list;
+    while (*pprev) {
+        struct pci_region_entry *entry = *pprev;
+        if (!entry->is64) {
+            pprev = &entry->next;
+            continue;
         }
-        else
-            pprev = &(*pprev)->next;
+        // Move from source list to destination list.
+        *pprev = entry->next;
+        entry->next = NULL;
+        *last = entry;
+        last = &entry->next;
     }
 }
 
@@ -499,6 +496,11 @@ static int pci_bios_check_devices(struct pci_bus *busses)
     return 0;
 }
 
+
+/****************************************************************
+ * BAR assignment
+ ****************************************************************/
+
 // Setup region bases (given the regions' size and alignment)
 static int pci_bios_init_root_regions(struct pci_bus *bus)
 {
@@ -525,11 +527,6 @@ static int pci_bios_init_root_regions(struct pci_bus *bus)
         return -1;
     return 0;
 }
-
-
-/****************************************************************
- * BAR assignment
- ****************************************************************/
 
 #define PCI_IO_SHIFT            8
 #define PCI_MEMORY_SHIFT        16
@@ -571,7 +568,7 @@ pci_region_map_one_entry(struct pci_region_entry *entry, u64 addr)
 static void pci_region_map_entries(struct pci_bus *busses, struct pci_region *r)
 {
     struct pci_region_entry *entry = r->list;
-    while(entry) {
+    while (entry) {
         u64 addr = r->base;
         r->base += entry->size;
         if (entry->bar == -1)
