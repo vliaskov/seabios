@@ -484,6 +484,144 @@ build_ssdt(void)
     return ssdt;
 }
 
+static unsigned char ssdt_mem[] = {
+    0x5b,0x82,0x47,0x07,0x4d,0x50,0x41,0x41,
+    0x08,0x49,0x44,0x5f,0x5f,0x0a,0xaa,0x08,
+    0x5f,0x48,0x49,0x44,0x0c,0x41,0xd0,0x0c,
+    0x80,0x08,0x5f,0x50,0x58,0x4d,0x0a,0xaa,
+    0x08,0x5f,0x43,0x52,0x53,0x11,0x33,0x0a,
+    0x30,0x8a,0x2b,0x00,0x00,0x0d,0x03,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xef,
+    0xbe,0xad,0xde,0x00,0x00,0x00,0x00,0xee,
+    0xbe,0xad,0xe6,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+    0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x79,
+    0x00,0x14,0x0f,0x5f,0x53,0x54,0x41,0x00,
+    0xa4,0x43,0x4d,0x53,0x54,0x49,0x44,0x5f,
+    0x5f,0x14,0x0f,0x5f,0x45,0x4a,0x30,0x01,
+    0x4d,0x50,0x45,0x4a,0x49,0x44,0x5f,0x5f,
+    0x68
+};
+
+#define MEM_BASE 0xaf80
+#define SD_OFFSET_MEMHEX 6
+#define SD_OFFSET_MEMID 14
+#define SD_OFFSET_PXMID 31
+#define SD_OFFSET_MEMSTART 55
+#define SD_OFFSET_MEMEND   63
+#define SD_OFFSET_MEMSIZE  79
+
+u64 nb_hp_memslots = 0;
+struct srat_memory_affinity *mem;
+
+static void build_memdev(u8 *ssdt_ptr, int i, u64 mem_base, u64 mem_len, u8 node)
+{
+    dprintf(1, "%s build memdev base = (%lu,%lu) len = (%lu, %lu)\n",
+            __FUNCTION__, mem_base>>32, mem_base&0xffffffff, mem_len>>32, mem_len&0xffffffff);
+    memcpy(ssdt_ptr, ssdt_mem, sizeof(ssdt_mem));
+    ssdt_ptr[SD_OFFSET_MEMHEX] = getHex(i >> 4);
+    ssdt_ptr[SD_OFFSET_MEMHEX+1] = getHex(i);
+    ssdt_ptr[SD_OFFSET_MEMID] = i;
+    ssdt_ptr[SD_OFFSET_PXMID] = node;
+    *(u64*)(ssdt_ptr + SD_OFFSET_MEMSTART) = mem_base;
+    *(u64*)(ssdt_ptr + SD_OFFSET_MEMEND) = mem_base + mem_len;
+    *(u64*)(ssdt_ptr + SD_OFFSET_MEMSIZE) = mem_len;
+}
+
+static void*
+build_memssdt(void)
+{
+    u64 mem_base;
+    u64 mem_len;
+    u8  node;
+    int i;
+    struct srat_memory_affinity *entry = mem;
+    u64 nb_memdevs = nb_hp_memslots;
+    u8  memslot_status, enabled;
+
+    int length = ((1+3+4)
+                  + (nb_memdevs * sizeof(ssdt_mem))
+                  + (1+2+5+(12*nb_memdevs))
+                  + (6+2+1+(1*nb_memdevs)));
+    u8 *ssdt = malloc_high(sizeof(struct acpi_table_header) + length);
+    if (! ssdt) {
+        warn_noalloc();
+        return NULL;
+    }
+    u8 *ssdt_ptr = ssdt + sizeof(struct acpi_table_header);
+
+    // build Scope(_SB_) header
+    *(ssdt_ptr++) = 0x10; // ScopeOp
+    ssdt_ptr = encodeLen(ssdt_ptr, length-1, 3);
+    *(ssdt_ptr++) = '_';
+    *(ssdt_ptr++) = 'S';
+    *(ssdt_ptr++) = 'B';
+    *(ssdt_ptr++) = '_';
+
+    for (i = 0; i < nb_memdevs; i++) {
+        mem_base = (((u64)(entry->base_addr_high) << 32 )| entry->base_addr_low);
+        mem_len = (((u64)(entry->length_high) << 32 )| entry->length_low);
+        node = entry->proximity[0];
+        build_memdev(ssdt_ptr, i, mem_base, mem_len, node);
+        ssdt_ptr += sizeof(ssdt_mem);
+        entry++;
+    }
+
+    // build "Method(MTFY, 2) {If (LEqual(Arg0, 0x00)) {Notify(CM00, Arg1)} ...}"
+    *(ssdt_ptr++) = 0x14; // MethodOp
+    ssdt_ptr = encodeLen(ssdt_ptr, 2+5+(12*nb_memdevs), 2);
+    *(ssdt_ptr++) = 'M';
+    *(ssdt_ptr++) = 'T';
+    *(ssdt_ptr++) = 'F';
+    *(ssdt_ptr++) = 'Y';
+    *(ssdt_ptr++) = 0x02;
+    for (i=0; i<nb_memdevs; i++) {
+        *(ssdt_ptr++) = 0xA0; // IfOp
+        ssdt_ptr = encodeLen(ssdt_ptr, 11, 1);
+        *(ssdt_ptr++) = 0x93; // LEqualOp
+        *(ssdt_ptr++) = 0x68; // Arg0Op
+        *(ssdt_ptr++) = 0x0A; // BytePrefix
+        *(ssdt_ptr++) = i;
+        *(ssdt_ptr++) = 0x86; // NotifyOp
+        *(ssdt_ptr++) = 'M';
+        *(ssdt_ptr++) = 'P';
+        *(ssdt_ptr++) = getHex(i >> 4);
+        *(ssdt_ptr++) = getHex(i);
+        *(ssdt_ptr++) = 0x69; // Arg1Op
+    }
+
+    // build "Name(MEON, Package() { One, One, ..., Zero, Zero, ... })"
+    *(ssdt_ptr++) = 0x08; // NameOp
+    *(ssdt_ptr++) = 'M';
+    *(ssdt_ptr++) = 'E';
+    *(ssdt_ptr++) = 'O';
+    *(ssdt_ptr++) = 'N';
+    *(ssdt_ptr++) = 0x12; // PackageOp
+    ssdt_ptr = encodeLen(ssdt_ptr, 2+1+(1*nb_memdevs), 2);
+    *(ssdt_ptr++) = nb_memdevs;
+
+    entry = mem;
+    memslot_status = 0;
+
+    for (i = 0; i < nb_memdevs; i++) {
+        enabled = 0;
+        if (i % 8 == 0)
+            memslot_status = inb(MEM_BASE + i/8);
+        enabled = memslot_status & 1;
+        mem_base = (((u64)(entry->base_addr_high) << 32 )| entry->base_addr_low);
+        mem_len = (((u64)(entry->length_high) << 32 )| entry->length_low);
+        *(ssdt_ptr++) = enabled ? 0x01 : 0x00;
+        dprintf(1, "dev %d enabled:%d memslot_status: %u\n", i, enabled, memslot_status);
+        if (enabled)
+            add_e820(mem_base, mem_len, E820_RAM);
+        memslot_status = memslot_status >> 1;
+        entry++;
+    }
+    build_header((void*)ssdt, SSDT_SIGNATURE, ssdt_ptr - ssdt, 1);
+
+    return ssdt;
+}
+
 #include "ssdt-pcihp.hex"
 
 #define PCI_RMV_BASE 0xae0c
@@ -588,10 +726,12 @@ build_srat(void)
 
     qemu_cfg_get_numa_data(numadata, MaxCountCPUs + nb_numa_nodes);
 
+    qemu_cfg_get_numa_data(&nb_hp_memslots, 1);
+
     struct system_resource_affinity_table *srat;
     int srat_size = sizeof(*srat) +
         sizeof(struct srat_processor_affinity) * MaxCountCPUs +
-        sizeof(struct srat_memory_affinity) * (nb_numa_nodes + 2);
+        sizeof(struct srat_memory_affinity) * (nb_numa_nodes + nb_hp_memslots + 2);
 
     srat = malloc_high(srat_size);
     if (!srat) {
@@ -627,6 +767,7 @@ build_srat(void)
      */
     struct srat_memory_affinity *numamem = (void*)core;
     int slots = 0;
+    int node;
     u64 mem_len, mem_base, next_base = 0;
 
     acpi_build_srat_memory(numamem, 0, 640*1024, 0, 1);
@@ -653,10 +794,39 @@ build_srat(void)
             next_base += (1ULL << 32) - RamSize;
         }
         acpi_build_srat_memory(numamem, mem_base, mem_len, i-1, 1);
+
         numamem++;
         slots++;
+
     }
-    for (; slots < nb_numa_nodes + 2; slots++) {
+    mem = (void*)numamem;
+
+    if (nb_hp_memslots) {
+        u64 *hpmemdata = malloc_tmphigh(sizeof(u64) * (3 * nb_hp_memslots));
+        if (!hpmemdata) {
+            warn_noalloc();
+            free(hpmemdata);
+            free(numadata);
+            return NULL;
+        }
+
+        qemu_cfg_get_numa_data(hpmemdata, 3 * nb_hp_memslots);
+
+        dprintf(1, "%s NUMNODES: %d NUMHPMEMSLOTS = %lu\n", __FUNCTION__, nb_numa_nodes,
+                nb_hp_memslots);
+        for (i = 1; i < nb_hp_memslots + 1; ++i) {
+            mem_base = *hpmemdata++;
+            mem_len = *hpmemdata++;
+            node = *hpmemdata++;
+            acpi_build_srat_memory(numamem, mem_base, mem_len, node, 1);
+            dprintf(1, "hotplug memory slot %d on node %d\n", i, node);
+            numamem++;
+            slots++;
+        }
+        free(hpmemdata);
+    }
+
+    for (; slots < nb_numa_nodes + nb_hp_memslots + 2; slots++) {
         acpi_build_srat_memory(numamem, 0, 0, 0, 0);
         numamem++;
     }
@@ -664,6 +834,7 @@ build_srat(void)
     build_header((void*)srat, SRAT_SIGNATURE, srat_size, 1);
 
     free(numadata);
+
     return srat;
 }
 
@@ -707,6 +878,7 @@ acpi_bios_init(void)
     ACPI_INIT_TABLE(build_madt());
     ACPI_INIT_TABLE(build_hpet());
     ACPI_INIT_TABLE(build_srat());
+    ACPI_INIT_TABLE(build_memssdt());
     ACPI_INIT_TABLE(build_pcihp());
 
     u16 i, external_tables = qemu_cfg_acpi_additional_tables();
