@@ -6,6 +6,3 @@
 pb_hotplug_allcpu_fixhang.patch
 pb_hotplug_cpusrat.patch
 pb_hotunplug_acpi_ej0.patch
-pb_Add-SSDT-memory-device-support.patch
-pb_Implement-acpi-dsdt-functions-for-memory-hotplug.patch
-pb_acpi-generate-hotplug-memory-devices.patch
