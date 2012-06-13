@@ -1,11 +1,11 @@
  src/acpi-dsdt.dsl |   73 ++++++++++++++++++++++++++++++++++++++++++++++++++--
  1 files changed, 70 insertions(+), 3 deletions(-)
 
-diff --git a/src/acpi-dsdt.dsl b/src/acpi-dsdt.dsl
-index 08412e2..6ea8710 100755
---- a/src/acpi-dsdt.dsl
-+++ b/src/acpi-dsdt.dsl
-@@ -762,7 +762,7 @@ DefinitionBlock (
+Index: seabios-ri/src/acpi-dsdt.dsl
+===================================================================
+--- seabios-ri.orig/src/acpi-dsdt.dsl	2012-06-13 16:35:35.000000000 +0200
++++ seabios-ri/src/acpi-dsdt.dsl	2012-06-13 16:51:08.789609115 +0200
+@@ -762,7 +762,7 @@
          Zero   /* reserved */
      })
  
@@ -14,7 +14,7 @@ index 08412e2..6ea8710 100755
      Scope(\_SB) {
          /* Objects filled in by run-time generated SSDT */
          External(NTFY, MethodObj)
-@@ -832,6 +832,72 @@ DefinitionBlock (
+@@ -838,6 +838,72 @@
              }
              Return(One)
          }
@@ -31,14 +31,14 @@ index 08412e2..6ea8710 100755
 +        }
 +
 +        /* Memory hotplug notify array */
-+        OperationRegion(MEST, SystemIO, 0xaf80, 32)
++        OperationRegion(MEST, SystemIO, 0xaf40, 128)
 +        Field (MEST, ByteAcc, NoLock, Preserve)
 +        {
-+            MES, 256
++            MES, 1024
 +        }
-+ 
++
 +        /* Memory eject notify byte */
-+        OperationRegion(MEMJ, SystemIO, 0xafa0, 1)
++        OperationRegion(MEMJ, SystemIO, 0xafc0, 1)
 +        Field (MEMJ, ByteAcc, NoLock, Preserve)
 +        {
 +            MPE, 8
@@ -87,7 +87,7 @@ index 08412e2..6ea8710 100755
      }
  
      Scope (\_GPE)
-@@ -890,8 +956,9 @@ DefinitionBlock (
+@@ -896,8 +962,9 @@
              // CPU hotplug event
              Return(\_SB.PRSC())
          }

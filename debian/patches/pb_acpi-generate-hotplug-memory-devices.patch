@@ -1,10 +1,10 @@
  src/acpi.c |  177 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
  1 files changed, 175 insertions(+), 2 deletions(-)
 
-diff --git a/src/acpi.c b/src/acpi.c
-index 3d8b7c8..1b3c289 100755
---- a/src/acpi.c
-+++ b/src/acpi.c
+Index: seabios-ri/src/acpi.c
+===================================================================
+--- seabios-ri.orig/src/acpi.c	2012-06-13 16:51:51.000000000 +0200
++++ seabios-ri/src/acpi.c	2012-06-13 17:06:20.902524303 +0200
 @@ -12,6 +12,7 @@
  #include "pci_ids.h" // PCI_VENDOR_ID_INTEL
  #include "pci_regs.h" // PCI_INTERRUPT_LINE
@@ -13,36 +13,36 @@ index 3d8b7c8..1b3c289 100755
  
  /****************************************************/
  /* ACPI tables init */
-@@ -462,6 +463,144 @@ build_ssdt(void)
+@@ -462,6 +463,150 @@
      return ssdt;
  }
  
 +static unsigned char ssdt_mem[] = {
-+    0x5b,0x82,0x47,0x07,0x4d,0x50,0x41,0x41,
-+    0x08,0x49,0x44,0x5f,0x5f,0x0a,0xaa,0x08,
-+    0x5f,0x48,0x49,0x44,0x0c,0x41,0xd0,0x0c,
-+    0x80,0x08,0x5f,0x50,0x58,0x4d,0x0a,0xaa,
-+    0x08,0x5f,0x43,0x52,0x53,0x11,0x33,0x0a,
-+    0x30,0x8a,0x2b,0x00,0x00,0x0d,0x03,0x00,
-+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xef,
-+    0xbe,0xad,0xde,0x00,0x00,0x00,0x00,0xee,
-+    0xbe,0xad,0xe6,0x00,0x00,0x00,0x00,0x00,
++    0x5b,0x82,0x48,0x07,0x4d,0x41,0x41,0x41,
++    0x08,0x49,0x44,0x5f,0x5f,0x0b,0xaa,0x0a,
++    0x08,0x5f,0x48,0x49,0x44,0x0c,0x41,0xd0,
++    0x0c,0x80,0x08,0x5f,0x50,0x58,0x4d,0x0a,
++    0xaa,0x08,0x5f,0x43,0x52,0x53,0x11,0x33,
++    0x0a,0x30,0x8a,0x2b,0x00,0x00,0x0d,0x03,
 +    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-+    0x00,0x00,0x08,0x00,0x00,0x00,0x00,0x79,
-+    0x00,0x14,0x0f,0x5f,0x53,0x54,0x41,0x00,
-+    0xa4,0x43,0x4d,0x53,0x54,0x49,0x44,0x5f,
-+    0x5f,0x14,0x0f,0x5f,0x45,0x4a,0x30,0x01,
-+    0x4d,0x50,0x45,0x4a,0x49,0x44,0x5f,0x5f,
-+    0x68
++    0xef,0xbe,0xad,0xde,0x00,0x00,0x00,0x00,
++    0xee,0xbe,0xad,0xe6,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x08,0x00,0x00,0x00,0x00,
++    0x79,0x00,0x14,0x0f,0x5f,0x53,0x54,0x41,
++    0x00,0xa4,0x43,0x4d,0x53,0x54,0x49,0x44,
++    0x5f,0x5f,0x14,0x0f,0x5f,0x45,0x4a,0x30,
++    0x01,0x4d,0x50,0x45,0x4a,0x49,0x44,0x5f,
++    0x5f,0x68
 +};
 +
-+#define MEM_BASE 0xaf80
-+#define SD_OFFSET_MEMHEX 6
++#define MEM_BASE 0xaf40
++#define SD_OFFSET_MEMHEX 5
 +#define SD_OFFSET_MEMID 14
-+#define SD_OFFSET_PXMID 31
-+#define SD_OFFSET_MEMSTART 55
-+#define SD_OFFSET_MEMEND   63
-+#define SD_OFFSET_MEMSIZE  79
++#define SD_OFFSET_PXMID 32
++#define SD_OFFSET_MEMSTART 56
++#define SD_OFFSET_MEMEND   64
++#define SD_OFFSET_MEMSIZE  80
 +
 +u64 nb_hp_memslots = 0;
 +struct srat_memory_affinity *mem;
@@ -52,9 +52,11 @@ index 3d8b7c8..1b3c289 100755
 +    dprintf(1, "%s build memdev base = (%lu,%lu) len = (%lu, %lu)\n",
 +            __FUNCTION__, mem_base>>32, mem_base&0xffffffff, mem_len>>32, mem_len&0xffffffff);
 +    memcpy(ssdt_ptr, ssdt_mem, sizeof(ssdt_mem));
-+    ssdt_ptr[SD_OFFSET_MEMHEX] = getHex(i >> 4);
-+    ssdt_ptr[SD_OFFSET_MEMHEX+1] = getHex(i);
-+    ssdt_ptr[SD_OFFSET_MEMID] = i;
++    ssdt_ptr[SD_OFFSET_MEMHEX] = getHex(i >> 8);
++    ssdt_ptr[SD_OFFSET_MEMHEX+1] = getHex(i >> 4);
++    ssdt_ptr[SD_OFFSET_MEMHEX+2] = getHex(i);
++    ssdt_ptr[SD_OFFSET_MEMID] = i & 0xff;
++    ssdt_ptr[SD_OFFSET_MEMID+1] = i >> 8;
 +    ssdt_ptr[SD_OFFSET_PXMID] = node;
 +    *(u64*)(ssdt_ptr + SD_OFFSET_MEMSTART) = mem_base;
 +    *(u64*)(ssdt_ptr + SD_OFFSET_MEMEND) = mem_base + mem_len;
@@ -74,8 +76,8 @@ index 3d8b7c8..1b3c289 100755
 +
 +    int length = ((1+3+4)
 +                  + (nb_memdevs * sizeof(ssdt_mem))
-+                  + (1+2+5+(12*nb_memdevs))
-+                  + (6+2+1+(1*nb_memdevs)));
++                  + (1+2+5+(13*nb_memdevs))
++                  + (6+2+2+(1*(nb_memdevs+1))));
 +    u8 *ssdt = malloc_high(sizeof(struct acpi_table_header) + length);
 +    if (! ssdt) {
 +        warn_noalloc();
@@ -102,7 +104,7 @@ index 3d8b7c8..1b3c289 100755
 +
 +    // build "Method(MTFY, 2) {If (LEqual(Arg0, 0x00)) {Notify(CM00, Arg1)} ...}"
 +    *(ssdt_ptr++) = 0x14; // MethodOp
-+    ssdt_ptr = encodeLen(ssdt_ptr, 2+5+(12*nb_memdevs), 2);
++    ssdt_ptr = encodeLen(ssdt_ptr, 2+5+(13*nb_memdevs), 2);
 +    *(ssdt_ptr++) = 'M';
 +    *(ssdt_ptr++) = 'T';
 +    *(ssdt_ptr++) = 'F';
@@ -113,11 +115,12 @@ index 3d8b7c8..1b3c289 100755
 +       ssdt_ptr = encodeLen(ssdt_ptr, 11, 1);
 +        *(ssdt_ptr++) = 0x93; // LEqualOp
 +        *(ssdt_ptr++) = 0x68; // Arg0Op
-+        *(ssdt_ptr++) = 0x0A; // BytePrefix
-+        *(ssdt_ptr++) = i;
++        *(ssdt_ptr++) = 0x0B; // WordPrefix
++        *(ssdt_ptr++) = i & 0xff;
++        *(ssdt_ptr++) = i >> 8;
 +        *(ssdt_ptr++) = 0x86; // NotifyOp
 +        *(ssdt_ptr++) = 'M';
-+        *(ssdt_ptr++) = 'P';
++        *(ssdt_ptr++) = getHex(i >> 8);
 +        *(ssdt_ptr++) = getHex(i >> 4);
 +        *(ssdt_ptr++) = getHex(i);
 +        *(ssdt_ptr++) = 0x69; // Arg1Op
@@ -129,9 +132,11 @@ index 3d8b7c8..1b3c289 100755
 +    *(ssdt_ptr++) = 'E';
 +    *(ssdt_ptr++) = 'O';
 +    *(ssdt_ptr++) = 'N';
-+    *(ssdt_ptr++) = 0x12; // PackageOp
-+    ssdt_ptr = encodeLen(ssdt_ptr, 2+1+(1*nb_memdevs), 2);
-+    *(ssdt_ptr++) = nb_memdevs;
++    *(ssdt_ptr++) = 0x13; // VarPackageOp
++    ssdt_ptr = encodeLen(ssdt_ptr, 2+2+(1*(nb_memdevs+1)), 2);
++    *(ssdt_ptr++) = 0x0B; //WordPrefix
++    *((u16*)ssdt_ptr) = nb_memdevs + 1;
++    ssdt_ptr +=2;
 +
 +    entry = mem;
 +    memslot_status = 0;
@@ -150,6 +155,7 @@ index 3d8b7c8..1b3c289 100755
 +        memslot_status = memslot_status >> 1;
 +        entry++;
 +    }
++    *(ssdt_ptr++) = 0x00;
 +    build_header((void*)ssdt, SSDT_SIGNATURE, ssdt_ptr - ssdt, 1);
 +
 +    return ssdt;
@@ -158,7 +164,7 @@ index 3d8b7c8..1b3c289 100755
  #define HPET_SIGNATURE 0x54455048 // HPET
  static void*
  build_hpet(void)
-@@ -524,10 +663,12 @@ build_srat(void)
+@@ -524,10 +669,12 @@
  
      qemu_cfg_get_numa_data(numadata, MaxCountCPUs + nb_numa_nodes);
  
@@ -172,7 +178,7 @@ index 3d8b7c8..1b3c289 100755
  
      srat = malloc_high(srat_size);
      if (!srat) {
-@@ -563,6 +704,7 @@ build_srat(void)
+@@ -563,6 +710,7 @@
       */
      struct srat_memory_affinity *numamem = (void*)core;
      int slots = 0;
@@ -180,7 +186,7 @@ index 3d8b7c8..1b3c289 100755
      u64 mem_len, mem_base, next_base = 0;
  
      acpi_build_srat_memory(numamem, 0, 640*1024, 0, 1);
-@@ -589,10 +731,39 @@ build_srat(void)
+@@ -589,10 +737,39 @@
              next_base += (1ULL << 32) - RamSize;
          }
          acpi_build_srat_memory(numamem, mem_base, mem_len, i-1, 1);
@@ -188,8 +194,7 @@ index 3d8b7c8..1b3c289 100755
          numamem++;
          slots++;
 +
-     }
--    for (; slots < nb_numa_nodes + 2; slots++) {
++    }
 +    mem = (void*)numamem;
 +
 +    if (nb_hp_memslots) {
@@ -215,13 +220,14 @@ index 3d8b7c8..1b3c289 100755
 +            slots++;
 +        }
 +        free(hpmemdata);
-+    }
+     }
+-    for (; slots < nb_numa_nodes + 2; slots++) {
 +
 +    for (; slots < nb_numa_nodes + nb_hp_memslots + 2; slots++) {
          acpi_build_srat_memory(numamem, 0, 0, 0, 0);
          numamem++;
      }
-@@ -600,6 +771,7 @@ build_srat(void)
+@@ -600,6 +777,7 @@
      build_header((void*)srat, SRAT_SIGNATURE, srat_size, 1);
  
      free(numadata);
@@ -229,7 +235,7 @@ index 3d8b7c8..1b3c289 100755
      return srat;
  }
  
-@@ -642,6 +814,7 @@ acpi_bios_init(void)
+@@ -642,6 +820,7 @@
      ACPI_INIT_TABLE(build_madt());
      ACPI_INIT_TABLE(build_hpet());
      ACPI_INIT_TABLE(build_srat());
