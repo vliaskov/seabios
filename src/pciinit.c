@@ -7,9 +7,10 @@
 
 #include "util.h" // dprintf
 #include "pci.h" // pci_config_readl
-#include "biosvar.h" // GET_EBDA
 #include "pci_ids.h" // PCI_VENDOR_ID_INTEL
 #include "pci_regs.h" // PCI_COMMAND
+#include "ioport.h" // PORT_ATA1_CMD_BASE
+#include "config.h" // CONFIG_*
 #include "xen.h" // usingXen
 
 #define PCI_DEVICE_MEM_MIN     0x1000
@@ -28,6 +29,11 @@ static const char *region_type_name[] = {
     [ PCI_REGION_TYPE_MEM ]     = "mem",
     [ PCI_REGION_TYPE_PREFMEM ] = "prefmem",
 };
+
+u64 pcimem_start   = BUILD_PCIMEM_START;
+u64 pcimem_end     = BUILD_PCIMEM_END;
+u64 pcimem64_start = BUILD_PCIMEM64_START;
+u64 pcimem64_end   = BUILD_PCIMEM64_END;
 
 struct pci_region_entry {
     struct pci_device *dev;
@@ -81,9 +87,15 @@ const u8 pci_irqs[4] = {
 };
 
 // Return the global irq number corresponding to a host bus device irq pin.
-static int pci_slot_get_irq(u16 bdf, int pin)
+static int pci_slot_get_irq(struct pci_device *pci, int pin)
 {
-    int slot_addend = pci_bdf_to_dev(bdf) - 1;
+    int slot_addend = 0;
+
+    while (pci->parent != NULL) {
+        slot_addend += pci_bdf_to_dev(pci->bdf);
+        pci = pci->parent;
+    }
+    slot_addend += pci_bdf_to_dev(pci->bdf) - 1;
     return pci_irqs[(pin - 1 + slot_addend) & 3];
 }
 
@@ -204,7 +216,7 @@ static void pci_bios_init_device(struct pci_device *pci)
     /* map the interrupt */
     int pin = pci_config_readb(bdf, PCI_INTERRUPT_PIN);
     if (pin != 0)
-        pci_config_writeb(bdf, PCI_INTERRUPT_LINE, pci_slot_get_irq(bdf, pin));
+        pci_config_writeb(bdf, PCI_INTERRUPT_LINE, pci_slot_get_irq(pci, pin));
 
     pci_init_device(pci_device_tbl, pci, NULL);
 }
@@ -213,9 +225,6 @@ static void pci_bios_init_devices(void)
 {
     struct pci_device *pci;
     foreachpci(pci) {
-        if (pci_bdf_to_bus(pci->bdf) != 0)
-            // Only init devices on host bus.
-            break;
         pci_bios_init_device(pci);
     }
 
@@ -516,13 +525,13 @@ static int pci_bios_init_root_regions(struct pci_bus *bus)
     }
     u64 sum = pci_region_sum(r_end);
     u64 align = pci_region_align(r_end);
-    r_end->base = ALIGN_DOWN((BUILD_PCIMEM_END - sum), align);
+    r_end->base = ALIGN_DOWN((pcimem_end - sum), align);
     sum = pci_region_sum(r_start);
     align = pci_region_align(r_start);
     r_start->base = ALIGN_DOWN((r_end->base - sum), align);
 
-    if ((r_start->base < BUILD_PCIMEM_START) ||
-         (r_start->base > BUILD_PCIMEM_END))
+    if ((r_start->base < pcimem_start) ||
+         (r_start->base > pcimem_end))
         // Memory range requested is larger than available.
         return -1;
     return 0;
@@ -595,11 +604,11 @@ static void pci_bios_map_devices(struct pci_bus *busses)
         if (pci_bios_init_root_regions(busses))
             panic("PCI: out of 32bit address space\n");
 
-        r64_mem.base = BUILD_PCIMEM64_START;
+        r64_mem.base = pcimem64_start;
         u64 sum = pci_region_sum(&r64_mem);
         u64 align = pci_region_align(&r64_pref);
         r64_pref.base = ALIGN(r64_mem.base + sum, align);
-        if (r64_pref.base + pci_region_sum(&r64_pref) > BUILD_PCIMEM64_END)
+        if (r64_pref.base + pci_region_sum(&r64_pref) > pcimem64_end)
             panic("PCI: out of 64bit address space\n");
         pci_region_map_entries(busses, &r64_mem);
         pci_region_map_entries(busses, &r64_pref);

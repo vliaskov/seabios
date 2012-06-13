@@ -9,7 +9,7 @@
 #include "farptr.h" // GET_VAR
 #include "bregs.h" // struct bregs
 #include "ioport.h" // outb
-#include "util.h" // wait_irq
+#include "util.h" // dprintf
 #include "config.h" // CONFIG_*
 #include "biosvar.h" // GET_GLOBAL
 
@@ -94,7 +94,7 @@ handle_155304(struct bregs *regs)
 static void
 handle_155305(struct bregs *regs)
 {
-    wait_irq();
+    yield_toirq();
     set_success(regs);
 }
 
@@ -223,15 +223,8 @@ handle_1553(struct bregs *regs)
     }
 }
 
-void VISIBLE16
-handle_apm16(struct bregs *regs)
-{
-    debug_enter(regs, DEBUG_HDL_apm);
-    handle_1553(regs);
-}
-
-void VISIBLE32SEG
-handle_apm32(struct bregs *regs)
+void VISIBLE16 VISIBLE32SEG
+handle_apm(struct bregs *regs)
 {
     debug_enter(regs, DEBUG_HDL_apm);
     handle_1553(regs);

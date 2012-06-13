@@ -80,8 +80,10 @@ handle_75(void)
     // clear interrupt
     eoi_pic2();
     // legacy nmi call
-    u32 eax=0, flags;
-    call16_simpint(0x02, &eax, &flags);
+    struct bregs br;
+    memset(&br, 0, sizeof(br));
+    br.flags = F_IF;
+    call16_int(0x02, &br);
 }
 
 

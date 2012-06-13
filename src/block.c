@@ -18,6 +18,7 @@ u8 FloppyCount VAR16VISIBLE;
 u8 CDCount;
 struct drive_s *IDMap[3][CONFIG_MAX_EXTDRIVE] VAR16VISIBLE;
 u8 *bounce_buf_fl VAR16VISIBLE;
+struct dpte_s DefaultDPTE VARLOW;
 
 struct drive_s *
 getDrive(u8 exttype, u8 extdriveoffset)
@@ -328,7 +329,7 @@ process_op(struct disk_op_s *op)
     }
 }
 
-// Execute a "disk_op_s" request - this runs on a stack in the ebda.
+// Execute a "disk_op_s" request - this runs on the extra stack.
 static int
 __send_disk_op(struct disk_op_s *op_far, u16 op_seg)
 {
@@ -349,7 +350,7 @@ __send_disk_op(struct disk_op_s *op_far, u16 op_seg)
     return status;
 }
 
-// Execute a "disk_op_s" request by jumping to a stack in the ebda.
+// Execute a "disk_op_s" request by jumping to the extra 16bit stack.
 int
 send_disk_op(struct disk_op_s *op)
 {

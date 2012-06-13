@@ -40,10 +40,23 @@ struct int13ext_s {
     u64 lba;
 } PACKED;
 
-#define GET_INT13EXT(regs,var)                                          \
-    GET_FARVAR((regs)->ds, ((struct int13ext_s*)((regs)->si+0))->var)
-#define SET_INT13EXT(regs,var,val)                                      \
-    SET_FARVAR((regs)->ds, ((struct int13ext_s*)((regs)->si+0))->var, (val))
+// DPTE definition
+struct dpte_s {
+    u16 iobase1;
+    u16 iobase2;
+    u8  prefix;
+    u8  unused;
+    u8  irq;
+    u8  blkcount;
+    u8  dma;
+    u8  pio;
+    u16 options;
+    u16 reserved;
+    u8  revision;
+    u8  checksum;
+};
+
+extern struct dpte_s DefaultDPTE;
 
 // Disk Physical Table definition
 struct int13dpt_s {
@@ -54,8 +67,7 @@ struct int13dpt_s {
     u32 spt;
     u64 sector_count;
     u16 blksize;
-    u16 dpte_offset;
-    u16 dpte_segment;
+    struct segoff_s dpte;
     u16 key;
     u8  dpi_length;
     u8  reserved1;
@@ -76,11 +88,6 @@ struct int13dpt_s {
         } t13;
     };
 } PACKED;
-
-#define GET_INT13DPT(regs,var)                                          \
-    GET_FARVAR((regs)->ds, ((struct int13dpt_s*)((regs)->si+0))->var)
-#define SET_INT13DPT(regs,var,val)                                      \
-    SET_FARVAR((regs)->ds, ((struct int13dpt_s*)((regs)->si+0))->var, (val))
 
 // Floppy "Disk Base Table"
 struct floppy_dbt_s {
@@ -179,6 +186,22 @@ struct chs_s {
     u16 heads;      // # heads
     u16 cylinders;  // # cylinders
     u16 spt;        // # sectors / track
+    u16 pad;
+};
+
+// ElTorito Device Emulation data
+struct cdemu_s {
+    struct drive_s *emulated_drive_gf;
+    u32 ilba;
+    u16 buffer_segment;
+    u16 load_segment;
+    u16 sector_count;
+    u8  active;
+    u8  media;
+    u8  emulated_extdrive;
+
+    // Virtual device
+    struct chs_s lchs;
 };
 
 struct drive_s {
@@ -249,6 +272,8 @@ int process_floppy_op(struct disk_op_s *op);
 void floppy_tick(void);
 
 // cdrom.c
+extern u8 CDRom_locks[];
+extern struct cdemu_s CDEmu;
 extern struct drive_s *cdemu_drive_gf;
 int process_cdemu_op(struct disk_op_s *op);
 void cdemu_setup(void);

@@ -108,22 +108,24 @@ calibrate_tsc(void)
     dprintf(1, "CPU Mhz=%u\n", hz / 1000000);
 }
 
+/* TSC emulation timekeepers */
+u64 TSC_8254 VARLOW;
+int Last_TSC_8254 VARLOW;
+
 static u64
 emulate_tsc(void)
 {
-    int cnt, d;
-    u16 ebda_seg = get_ebda_seg();
-    u64 ret;
     /* read timer 0 current count */
-    ret = GET_EBDA2(ebda_seg, tsc_8254);
-    /* readback mode has slightly shifted registers, works on all 8254, readback PIT0 latch */
+    u64 ret = GET_LOW(TSC_8254);
+    /* readback mode has slightly shifted registers, works on all
+     * 8254, readback PIT0 latch */
     outb(PM_SEL_READBACK | PM_READ_VALUE | PM_READ_COUNTER0, PORT_PIT_MODE);
-    cnt = (inb(PORT_PIT_COUNTER0) | (inb(PORT_PIT_COUNTER0) << 8));
-    d = GET_EBDA2(ebda_seg, last_tsc_8254) - cnt;
+    int cnt = (inb(PORT_PIT_COUNTER0) | (inb(PORT_PIT_COUNTER0) << 8));
+    int d = GET_LOW(Last_TSC_8254) - cnt;
     /* Determine the ticks count from last invocation of this function */
     ret += (d > 0) ? d : (PIT_TICK_INTERVAL + d);
-    SET_EBDA2(ebda_seg, last_tsc_8254, cnt);
-    SET_EBDA2(ebda_seg, tsc_8254, ret);
+    SET_LOW(Last_TSC_8254, cnt);
+    SET_LOW(TSC_8254, ret);
     return ret;
 }
 
@@ -534,8 +536,10 @@ handle_08(void)
     usb_check_event();
 
     // chain to user timer tick INT #0x1c
-    u32 eax=0, flags;
-    call16_simpint(0x1c, &eax, &flags);
+    struct bregs br;
+    memset(&br, 0, sizeof(br));
+    br.flags = F_IF;
+    call16_int(0x1c, &br);
 
     eoi_pic1();
 }
@@ -545,12 +549,13 @@ handle_08(void)
  * Periodic timer
  ****************************************************************/
 
+int RTCusers VARLOW;
+
 void
 useRTC(void)
 {
-    u16 ebda_seg = get_ebda_seg();
-    int count = GET_EBDA2(ebda_seg, RTCusers);
-    SET_EBDA2(ebda_seg, RTCusers, count+1);
+    int count = GET_LOW(RTCusers);
+    SET_LOW(RTCusers, count+1);
     if (count)
         return;
     // Turn on the Periodic Interrupt timer
@@ -561,9 +566,8 @@ useRTC(void)
 void
 releaseRTC(void)
 {
-    u16 ebda_seg = get_ebda_seg();
-    int count = GET_EBDA2(ebda_seg, RTCusers);
-    SET_EBDA2(ebda_seg, RTCusers, count-1);
+    int count = GET_LOW(RTCusers);
+    SET_LOW(RTCusers, count-1);
     if (count != 1)
         return;
     // Clear the Periodic Interrupt.
@@ -610,7 +614,7 @@ handle_1586(struct bregs *regs)
         return;
     }
     while (!statusflag)
-        wait_irq();
+        yield_toirq();
     set_success(regs);
 }
 
@@ -667,8 +671,10 @@ handle_70(void)
         goto done;
     if (registerC & RTC_B_AIE) {
         // Handle Alarm Interrupt.
-        u32 eax=0, flags;
-        call16_simpint(0x4a, &eax, &flags);
+        struct bregs br;
+        memset(&br, 0, sizeof(br));
+        br.flags = F_IF;
+        call16_int(0x4a, &br);
     }
     if (!(registerC & RTC_B_PIE))
         goto done;

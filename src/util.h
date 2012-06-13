@@ -159,23 +159,6 @@ static inline u8 readb(const void *addr) {
     return *(volatile const u8 *)addr;
 }
 
-#define call16_simpint(nr, peax, pflags) do {                           \
-        ASSERT16();                                                     \
-        asm volatile(                                                   \
-            "pushl %%ebp\n"                                             \
-            "sti\n"                                                     \
-            "stc\n"                                                     \
-            "int %2\n"                                                  \
-            "pushfl\n"                                                  \
-            "popl %1\n"                                                 \
-            "cli\n"                                                     \
-            "cld\n"                                                     \
-            "popl %%ebp"                                                \
-            : "+a"(*peax), "=c"(*pflags)                                \
-            : "i"(nr)                                                   \
-            : "ebx", "edx", "esi", "edi", "cc", "memory");              \
-    } while (0)
-
 // GDT bits
 #define GDT_CODE     (0x9bULL << 40) // Code segment - P,R,A bits also set
 #define GDT_DATA     (0x93ULL << 40) // Data segment - W,A bits also set
@@ -197,14 +180,6 @@ struct descloc_s {
 
 // util.c
 void cpuid(u32 index, u32 *eax, u32 *ebx, u32 *ecx, u32 *edx);
-struct bregs;
-inline void call16(struct bregs *callregs);
-inline void call16big(struct bregs *callregs);
-inline void __call16_int(struct bregs *callregs, u16 offset);
-#define call16_int(nr, callregs) do {                           \
-        extern void irq_trampoline_ ##nr ();                    \
-        __call16_int((callregs), (u32)&irq_trampoline_ ##nr );  \
-    } while (0)
 u8 checksum_far(u16 buf_seg, void *buf_far, u32 len);
 u8 checksum(void *buf, u32 len);
 size_t strlen(const char *s);
@@ -229,13 +204,22 @@ void nullTrailingSpace(char *buf);
 int get_keystroke(int msec);
 
 // stacks.c
+extern u8 ExtraStack[], *StackPos;
+u32 stack_hop(u32 eax, u32 edx, void *func);
+u32 stack_hop_back(u32 eax, u32 edx, void *func);
 u32 call32(void *func, u32 eax, u32 errret);
-inline u32 stack_hop(u32 eax, u32 edx, void *func);
+struct bregs;
+inline void farcall16(struct bregs *callregs);
+inline void farcall16big(struct bregs *callregs);
+inline void __call16_int(struct bregs *callregs, u16 offset);
+#define call16_int(nr, callregs) do {                           \
+        extern void irq_trampoline_ ##nr ();                    \
+        __call16_int((callregs), (u32)&irq_trampoline_ ##nr );  \
+    } while (0)
 extern struct thread_info MainThread;
-extern int CanPreempt;
 struct thread_info *getCurThread(void);
 void yield(void);
-void wait_irq(void);
+void yield_toirq(void);
 void run_thread(void (*func)(void*), void *data);
 void wait_threads(void);
 struct mutex_s { u32 isLocked; };
@@ -374,15 +358,11 @@ void smp_probe(void);
 // coreboot.c
 extern const char *CBvendor, *CBpart;
 struct cbfs_file;
-struct cbfs_file *cbfs_finddatafile(const char *fname);
-struct cbfs_file *cbfs_findprefix(const char *prefix, struct cbfs_file *last);
-u32 cbfs_datasize(struct cbfs_file *file);
-const char *cbfs_filename(struct cbfs_file *file);
-int cbfs_copyfile(struct cbfs_file *file, void *dst, u32 maxlen);
 void cbfs_run_payload(struct cbfs_file *file);
 void coreboot_copy_biostable(void);
 void cbfs_payload_setup(void);
 void coreboot_setup(void);
+void coreboot_cbfs_setup(void);
 
 // biostable.c
 void copy_pir(void *pos);
@@ -400,7 +380,6 @@ void call_bcv(u16 seg, u16 ip);
 void optionrom_setup(void);
 void vga_setup(void);
 void s3_resume_vga_init(void);
-extern u32 RomEnd;
 extern int ScreenAndDebug;
 
 // bootsplash.c
@@ -419,6 +398,10 @@ void pnp_setup(void);
 
 // pmm.c
 extern struct zone_s ZoneLow, ZoneHigh, ZoneFSeg, ZoneTmpLow, ZoneTmpHigh;
+u32 rom_get_top(void);
+u32 rom_get_last(void);
+struct rom_header *rom_reserve(u32 size);
+int rom_confirm(u32 size);
 void malloc_setup(void);
 void malloc_fixupreloc(void);
 void malloc_finalize(void);
@@ -475,6 +458,24 @@ static inline void free(void *data) {
 
 // mtrr.c
 void mtrr_setup(void);
+
+// romfile.c
+struct romfile_s {
+    struct romfile_s *next;
+    char name[128];
+    u32 size;
+    int (*copy)(struct romfile_s *file, void *dest, u32 maxlen);
+
+    u32 id;
+    u32 rawsize;
+    u32 flags;
+    void *data;
+};
+void romfile_add(struct romfile_s *file);
+struct romfile_s *romfile_findprefix(const char *prefix, struct romfile_s *prev);
+struct romfile_s *romfile_find(const char *name);
+void *romfile_loadfile(const char *name, int *psize);
+u64 romfile_loadint(const char *name, u64 defval);
 
 // romlayout.S
 void reset_vector(void) __noreturn;

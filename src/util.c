@@ -26,55 +26,6 @@ cpuid(u32 index, u32 *eax, u32 *ebx, u32 *ecx, u32 *edx)
 
 
 /****************************************************************
- * 16bit calls
- ****************************************************************/
-
-// Call a function with a specified register state.  Note that on
-// return, the interrupt enable/disable flag may be altered.
-inline void
-call16(struct bregs *callregs)
-{
-    if (!MODESEGMENT && getesp() > BUILD_STACK_ADDR)
-        panic("call16 with invalid stack\n");
-    asm volatile(
-#if MODE16 == 1
-        "calll __call16\n"
-        "cli\n"
-        "cld"
-#else
-        "calll __call16_from32"
-#endif
-        : "+a" (callregs), "+m" (*callregs)
-        :
-        : "ebx", "ecx", "edx", "esi", "edi", "cc", "memory");
-}
-
-inline void
-call16big(struct bregs *callregs)
-{
-    ASSERT32FLAT();
-    if (getesp() > BUILD_STACK_ADDR)
-        panic("call16 with invalid stack\n");
-    asm volatile(
-        "calll __call16big_from32"
-        : "+a" (callregs), "+m" (*callregs)
-        :
-        : "ebx", "ecx", "edx", "esi", "edi", "cc", "memory");
-}
-
-inline void
-__call16_int(struct bregs *callregs, u16 offset)
-{
-    if (MODESEGMENT)
-        callregs->code.seg = GET_SEG(CS);
-    else
-        callregs->code.seg = SEG_BIOS;
-    callregs->code.offset = offset;
-    call16(callregs);
-}
-
-
-/****************************************************************
  * String ops
  ****************************************************************/
 
@@ -142,7 +93,7 @@ memset_far(u16 d_seg, void *d_far, u8 c, size_t len)
     asm volatile(
         "rep stosb %%es:(%%di)"
         : "+c"(len), "+D"(d_far)
-        : "a"(c)
+        : "a"(c), "m" (__segment_ES)
         : "cc", "memory");
 }
 
@@ -154,7 +105,7 @@ memset16_far(u16 d_seg, void *d_far, u16 c, size_t len)
     asm volatile(
         "rep stosw %%es:(%%di)"
         : "+c"(len), "+D"(d_far)
-        : "a"(c)
+        : "a"(c), "m" (__segment_ES)
         : "cc", "memory");
 }
 
@@ -186,7 +137,7 @@ memcpy_far(u16 d_seg, void *d_far, u16 s_seg, const void *s_far, size_t len)
         "rep movsb (%%si),%%es:(%%di)\n"
         "movw %w0, %%ds"
         : "=&r"(bkup_ds), "+c"(len), "+S"(s_far), "+D"(d_far)
-        : "r"(s_seg)
+        : "r"(s_seg), "m" (__segment_ES)
         : "cc", "memory");
 }
 
@@ -215,7 +166,7 @@ memcpy(void *d1, const void *s1, size_t len)
         asm volatile(
             "rep movsb (%%esi),%%es:(%%edi)"
             : "+c"(len), "+S"(s1), "+D"(d)
-            : : "cc", "memory");
+            : "m" (__segment_ES) : "cc", "memory");
         return d1;
     }
     // Common case - use 4-byte copy
@@ -223,7 +174,7 @@ memcpy(void *d1, const void *s1, size_t len)
     asm volatile(
         "rep movsl (%%esi),%%es:(%%edi)"
         : "+c"(len), "+S"(s1), "+D"(d)
-        : : "cc", "memory");
+        : "m" (__segment_ES) : "cc", "memory");
     return d1;
 }
 
@@ -232,6 +183,7 @@ memcpy(void *d1, const void *s1, size_t len)
 void
 iomemcpy(void *d, const void *s, u32 len)
 {
+    ASSERT32FLAT();
     yield();
     while (len > 3) {
         u32 copylen = len;
@@ -335,6 +287,6 @@ get_keystroke(int msec)
             return get_raw_keystroke();
         if (check_timer(end))
             return -1;
-        wait_irq();
+        yield_toirq();
     }
 }

@@ -6,14 +6,13 @@
 // This file may be distributed under the terms of the GNU LGPLv3 license.
 
 #include "util.h" // dprintf
-#include "biosvar.h" // GET_EBDA
 #include "config.h" // CONFIG_*
 #include "disk.h" // cdrom_boot
 #include "bregs.h" // struct bregs
 #include "boot.h" // func defs
 #include "cmos.h" // inb_cmos
-#include "paravirt.h" // romfile_loadfile
-#include "pci.h" //pci_bdf_to_*
+#include "paravirt.h" // qemu_cfg_show_boot_menu
+#include "pci.h" // pci_bdf_to_*
 #include "usb.h" // struct usbdevice_s
 
 
@@ -237,8 +236,6 @@ boot_setup(void)
 {
     if (! CONFIG_BOOT)
         return;
-
-    SET_EBDA(boot_sequence, 0xffff);
 
     if (!CONFIG_COREBOOT) {
         // On emulators, get boot order from nvram.
@@ -533,7 +530,7 @@ call_boot_entry(struct segoff_s bootsegip, u8 bootdrv)
     // Set the magic number in ax and the boot drive in dl.
     br.dl = bootdrv;
     br.ax = 0xaa55;
-    call16(&br);
+    farcall16(&br);
 }
 
 // Boot from a disk (either floppy or harddrive)
@@ -587,9 +584,8 @@ boot_cdrom(struct drive_s *drive_g)
         return;
     }
 
-    u16 ebda_seg = get_ebda_seg();
-    u8 bootdrv = GET_EBDA2(ebda_seg, cdemu.emulated_extdrive);
-    u16 bootseg = GET_EBDA2(ebda_seg, cdemu.load_segment);
+    u8 bootdrv = CDEmu.emulated_extdrive;
+    u16 bootseg = CDEmu.load_segment;
     /* Canonicalize bootseg:bootip */
     u16 bootip = (bootseg & 0x0fff) << 4;
     bootseg &= 0xf000;
@@ -617,19 +613,38 @@ boot_rom(u32 vector)
     call_boot_entry(so, 0);
 }
 
+// Unable to find bootable device - warn user and eventually retry.
+static void
+boot_fail(void)
+{
+    u32 retrytime = romfile_loadint("etc/boot-fail-wait", 60*1000);
+    if (retrytime == (u32)-1)
+        printf("No bootable device.\n");
+    else
+        printf("No bootable device.  Retrying in %d seconds.\n", retrytime/1000);
+    // Wait for 'retrytime' milliseconds and then reboot.
+    u32 end = calc_future_timer(retrytime);
+    for (;;) {
+        if (retrytime != (u32)-1 && check_timer(end))
+            break;
+        yield_toirq();
+    }
+    printf("Rebooting.\n");
+    struct bregs br;
+    memset(&br, 0, sizeof(br));
+    br.code = SEGOFF(SEG_BIOS, (u32)reset_vector);
+    farcall16big(&br);
+}
+
 // Determine next boot method and attempt a boot using it.
 static void
-do_boot(u16 seq_nr)
+do_boot(int seq_nr)
 {
     if (! CONFIG_BOOT)
         panic("Boot support not compiled in.\n");
 
-    if (seq_nr >= BEVCount) {
-        printf("No bootable device.\n");
-        // Loop with irqs enabled - this allows ctrl+alt+delete to work.
-        for (;;)
-            wait_irq();
-    }
+    if (seq_nr >= BEVCount)
+        boot_fail();
 
     // Boot the given BEV type.
     struct bev_s *ie = &BEV[seq_nr];
@@ -660,15 +675,16 @@ do_boot(u16 seq_nr)
     call16_int(0x18, &br);
 }
 
+int BootSequence VARLOW = -1;
+
 // Boot Failure recovery: try the next device.
 void VISIBLE32FLAT
 handle_18(void)
 {
     debug_serial_setup();
     debug_enter(NULL, DEBUG_HDL_18);
-    u16 ebda_seg = get_ebda_seg();
-    u16 seq = GET_EBDA2(ebda_seg, boot_sequence) + 1;
-    SET_EBDA2(ebda_seg, boot_sequence, seq);
+    int seq = BootSequence + 1;
+    BootSequence = seq;
     do_boot(seq);
 }
 
@@ -678,6 +694,6 @@ handle_19(void)
 {
     debug_serial_setup();
     debug_enter(NULL, DEBUG_HDL_19);
-    SET_EBDA(boot_sequence, 0);
+    BootSequence = 0;
     do_boot(0);
 }

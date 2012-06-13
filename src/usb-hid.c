@@ -211,16 +211,27 @@ procmodkey(u8 mods, u8 flags)
         }
 }
 
+struct usbkeyinfo {
+    union {
+        struct {
+            u8 modifiers;
+            u8 repeatcount;
+            u8 keys[6];
+        };
+        u64 data;
+    };
+};
+struct usbkeyinfo LastUSBkey VARLOW;
+
 // Process USB keyboard data.
-static void noinline
+static void
 handle_key(struct keyevent *data)
 {
     dprintf(9, "Got key %x %x\n", data->modifiers, data->keys[0]);
 
     // Load old keys.
-    u16 ebda_seg = get_ebda_seg();
     struct usbkeyinfo old;
-    old.data = GET_EBDA2(ebda_seg, usbkey_last.data);
+    old.data = GET_LOW(LastUSBkey.data);
 
     // Check for keys no longer pressed.
     int addpos = 0;
@@ -273,7 +284,7 @@ handle_key(struct keyevent *data)
     }
 
     // Update old keys
-    SET_EBDA2(ebda_seg, usbkey_last.data, old.data);
+    SET_LOW(LastUSBkey.data, old.data);
 }
 
 // Check if a USB keyboard event is pending and process it if so.

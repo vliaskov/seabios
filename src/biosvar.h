@@ -8,8 +8,7 @@
 
 #include "types.h" // u8
 #include "farptr.h" // GET_FARVAR
-#include "config.h" // CONFIG_*
-#include "disk.h" // struct chs_s
+#include "config.h" // SEG_BDA
 
 
 /****************************************************************
@@ -149,37 +148,6 @@ struct bios_data_area_s {
  * Extended Bios Data Area (EBDA)
  ****************************************************************/
 
-// DPTE definition
-struct dpte_s {
-    u16 iobase1;
-    u16 iobase2;
-    u8  prefix;
-    u8  unused;
-    u8  irq;
-    u8  blkcount;
-    u8  dma;
-    u8  pio;
-    u16 options;
-    u16 reserved;
-    u8  revision;
-    u8  checksum;
-};
-
-// ElTorito Device Emulation data
-struct cdemu_s {
-    struct drive_s *emulated_drive_gf;
-    u32 ilba;
-    u16 buffer_segment;
-    u16 load_segment;
-    u16 sector_count;
-    u8  active;
-    u8  media;
-    u8  emulated_extdrive;
-
-    // Virtual device
-    struct chs_s lchs;
-};
-
 struct fdpt_s {
     u16 cylinders;
     u8 heads;
@@ -194,17 +162,6 @@ struct fdpt_s {
     u8 sectors;
     u8 checksum;
 } PACKED;
-
-struct usbkeyinfo {
-    union {
-        struct {
-            u8 modifiers;
-            u8 repeatcount;
-            u8 keys[6];
-        };
-        u64 data;
-    };
-};
 
 struct extended_bios_data_area_s {
     u8 size;
@@ -223,28 +180,6 @@ struct extended_bios_data_area_s {
     u8 other2[0xC4];
 
     // 0x121 - Begin custom storage.
-    u8 ps2ctr;
-    struct usbkeyinfo usbkey_last;
-
-    int RTCusers;
-
-    // El Torito Emulation data
-    struct cdemu_s cdemu;
-
-    // Buffer for disk DPTE table
-    struct dpte_s dpte;
-
-    // Locks for removable devices
-    u8 cdrom_locks[CONFIG_MAX_EXTDRIVE];
-
-    u16 boot_sequence;
-
-    /* TSC emulation timekeepers */
-    u64 tsc_8254;
-    int last_tsc_8254;
-
-    // Stack space available for code that needs it.
-    u8 extra_stack[512] __aligned(8);
 } PACKED;
 
 // The initial size and location of EBDA
@@ -263,19 +198,10 @@ get_ebda_ptr(void)
     ASSERT32FLAT();
     return MAKE_FLATPTR(get_ebda_seg(), 0);
 }
-#define GET_EBDA2(eseg, var)                                            \
+#define GET_EBDA(eseg, var)                                             \
     GET_FARVAR(eseg, ((struct extended_bios_data_area_s *)0)->var)
-#define SET_EBDA2(eseg, var, val)                                       \
+#define SET_EBDA(eseg, var, val)                                        \
     SET_FARVAR(eseg, ((struct extended_bios_data_area_s *)0)->var, (val))
-#define GET_EBDA(var)                           \
-    GET_EBDA2(get_ebda_seg(), var)
-#define SET_EBDA(var, val)                      \
-    SET_EBDA2(get_ebda_seg(), var, (val))
-
-#define EBDA_OFFSET_TOP_STACK                                   \
-    offsetof(struct extended_bios_data_area_s, extra_stack[     \
-                 FIELD_SIZEOF(struct extended_bios_data_area_s  \
-                              , extra_stack)])
 
 
 /****************************************************************
@@ -318,6 +244,26 @@ static inline u16 get_global_seg(void) {
 #endif
 // Access a "flat" pointer known to point to the f-segment.
 #define GET_GLOBALFLAT(var) GET_GLOBAL(*GLOBALFLAT2GLOBAL(&(var)))
+
+
+/****************************************************************
+ * "Low" memory variables
+ ****************************************************************/
+
+extern u8 _datalow_seg, _datalow_base[];
+#define SEG_LOW ((u32)&_datalow_seg)
+
+#if MODESEGMENT
+#define GET_LOW(var)            GET_FARVAR(SEG_LOW, (var))
+#define SET_LOW(var, val)       SET_FARVAR(SEG_LOW, (var), (val))
+#define LOWFLAT2LOW(var) ((typeof(var))((void*)(var) - (u32)_datalow_base))
+#else
+#define GET_LOW(var)            (var)
+#define SET_LOW(var, val)       do { (var) = (val); } while (0)
+#define LOWFLAT2LOW(var) (var)
+#endif
+#define GET_LOWFLAT(var) GET_LOW(*LOWFLAT2LOW(&(var)))
+#define SET_LOWFLAT(var, val) SET_LOW(*LOWFLAT2LOW(&(var)), (val))
 
 
 /****************************************************************
