@@ -1,75 +1,24 @@
-out/ccode.16.s: src/misc.c src/bregs.h src/farptr.h src/ioport.h \
- src/types.h src/biosvar.h src/config.h src/disk.h src/util.h src/pic.h \
- src/pmm.c src/util.h src/types.h src/config.h src/memmap.h src/farptr.h \
- src/ioport.h src/biosvar.h src/disk.h src/stacks.c src/biosvar.h \
- src/types.h src/farptr.h src/ioport.h src/config.h src/disk.h src/util.h \
- src/bregs.h src/output.c \
- /usr/lib/gcc/x86_64-linux-gnu/4.4.5/include/stdarg.h src/farptr.h \
- src/ioport.h src/types.h src/util.h src/bregs.h src/config.h \
- src/biosvar.h src/disk.h src/util.c src/util.h src/types.h src/bregs.h \
- src/farptr.h src/ioport.h src/config.h src/block.c src/disk.h \
- src/types.h src/config.h src/farptr.h src/ioport.h src/biosvar.h \
- src/cmos.h src/util.h src/ata.h src/usb-msc.h src/virtio-blk.h \
- src/floppy.c src/types.h src/disk.h src/config.h src/farptr.h \
- src/ioport.h src/biosvar.h src/util.h src/cmos.h src/pic.h src/bregs.h \
- src/ata.c src/types.h src/ioport.h src/util.h src/cmos.h src/pic.h \
- src/biosvar.h src/farptr.h src/config.h src/disk.h src/pci.h \
- src/pci_ids.h src/pci_regs.h src/boot.h src/ata.h src/blockcmd.h \
- src/mouse.c src/biosvar.h src/types.h src/farptr.h src/ioport.h \
- src/config.h src/disk.h src/util.h src/pic.h src/bregs.h src/ps2port.h \
- src/usb-hid.h src/kbd.c src/biosvar.h src/types.h src/farptr.h \
- src/ioport.h src/config.h src/disk.h src/util.h src/bregs.h \
- src/ps2port.h src/usb-hid.h src/pci.c src/pci.h src/types.h src/ioport.h \
- src/util.h src/config.h src/pci_regs.h src/pci_ids.h src/serial.c \
- src/biosvar.h src/types.h src/farptr.h src/ioport.h src/config.h \
- src/disk.h src/util.h src/bregs.h src/clock.c src/biosvar.h src/types.h \
- src/farptr.h src/ioport.h src/config.h src/disk.h src/util.h src/cmos.h \
- src/pic.h src/bregs.h src/usb-hid.h src/pic.c src/pic.h src/ioport.h \
- src/types.h src/biosvar.h src/farptr.h src/config.h src/disk.h \
- src/util.h src/cdrom.c src/disk.h src/types.h src/config.h src/farptr.h \
- src/ioport.h src/util.h src/bregs.h src/biosvar.h src/ata.h \
- src/blockcmd.h src/ps2port.c src/ioport.h src/types.h src/util.h \
- src/biosvar.h src/farptr.h src/config.h src/disk.h src/ps2port.h \
- src/pic.h src/smp.c src/util.h src/types.h src/config.h src/cmos.h \
- src/ioport.h src/paravirt.h src/resume.c src/util.h src/types.h \
- src/ioport.h src/pic.h src/biosvar.h src/farptr.h src/config.h \
- src/disk.h src/bregs.h src/acpi.h src/pnpbios.c src/util.h src/types.h \
- src/config.h src/farptr.h src/ioport.h src/pirtable.c src/pci.h \
- src/types.h src/util.h src/biosvar.h src/farptr.h src/ioport.h \
- src/config.h src/disk.h src/vgahooks.c src/bregs.h src/farptr.h \
- src/ioport.h src/types.h src/biosvar.h src/config.h src/disk.h src/pci.h \
- src/pci_regs.h src/pci_ids.h src/util.h src/ramdisk.c src/disk.h \
- src/types.h src/config.h src/farptr.h src/ioport.h src/util.h \
- src/memmap.h src/biosvar.h src/bregs.h src/pcibios.c src/types.h \
- src/util.h src/pci.h src/bregs.h src/farptr.h src/ioport.h src/biosvar.h \
- src/config.h src/disk.h src/pci_regs.h src/blockcmd.c src/biosvar.h \
- src/types.h src/farptr.h src/ioport.h src/config.h src/disk.h src/util.h \
- src/blockcmd.h src/ata.h src/usb-msc.h src/usb.c src/util.h src/types.h \
- src/pci.h src/config.h src/pci_regs.h src/pci_ids.h src/usb-uhci.h \
- src/usb-ohci.h src/usb-ehci.h src/usb-hid.h src/usb-hub.h src/usb-msc.h \
- src/usb.h src/biosvar.h src/farptr.h src/ioport.h src/disk.h \
- src/usb-uhci.c src/util.h src/types.h src/pci.h src/config.h \
- src/ioport.h src/usb-uhci.h src/pci_regs.h src/usb.h src/farptr.h \
- src/usb-ohci.c src/util.h src/types.h src/pci.h src/config.h \
- src/usb-ohci.h src/pci_regs.h src/usb.h src/farptr.h src/ioport.h \
- src/usb-ehci.c src/util.h src/types.h src/pci.h src/config.h \
- src/ioport.h src/usb-ehci.h src/pci_ids.h src/pci_regs.h src/usb.h \
- src/farptr.h src/usb-uhci.h src/usb-ohci.h src/usb-hid.c src/util.h \
- src/types.h src/usb-hid.h src/config.h src/usb.h src/biosvar.h \
- src/farptr.h src/ioport.h src/disk.h src/ps2port.h src/usb-msc.c \
- src/util.h src/types.h src/config.h src/usb-msc.h src/usb.h \
- src/biosvar.h src/farptr.h src/ioport.h src/disk.h src/blockcmd.h \
- src/boot.h src/virtio-ring.c src/virtio-ring.h src/types.h src/memmap.h \
- src/virtio-pci.h src/ioport.h src/biosvar.h src/farptr.h src/config.h \
- src/disk.h src/util.h src/virtio-pci.c src/virtio-ring.h src/types.h \
- src/memmap.h src/virtio-pci.h src/ioport.h src/config.h src/util.h \
- src/virtio-blk.c src/util.h src/types.h src/pci.h src/config.h \
- src/biosvar.h src/farptr.h src/ioport.h src/disk.h src/pci_ids.h \
- src/pci_regs.h src/boot.h src/virtio-pci.h src/virtio-ring.h \
- src/memmap.h src/virtio-blk.h src/apm.c src/farptr.h src/ioport.h \
- src/types.h src/bregs.h src/util.h src/config.h src/biosvar.h src/disk.h \
- src/system.c src/util.h src/types.h src/biosvar.h src/farptr.h \
- src/ioport.h src/config.h src/disk.h src/memmap.h src/pic.h src/bregs.h \
- src/disk.c src/disk.h src/types.h src/config.h src/farptr.h src/ioport.h \
- src/biosvar.h src/util.h src/pic.h src/bregs.h src/pci.h src/ata.h \
- src/font.c src/types.h
+out/ccode.16.s: out/ccode.16.s.tmp.c out/../src/misc.c out/../src/bregs.h \
+ out/../src/farptr.h out/../src/ioport.h out/../src/types.h \
+ out/../src/biosvar.h out/../src/config.h out/autoconf.h \
+ out/../src/disk.h out/../src/util.h out/../src/pic.h out/../src/stacks.c \
+ out/../src/pmm.c out/../src/memmap.h out/../src/output.c \
+ /usr/lib/x86_64-linux-gnu/gcc/x86_64-linux-gnu/4.6.1/include/stdarg.h \
+ out/../src/util.c out/../src/block.c out/../src/cmos.h out/../src/ata.h \
+ out/../src/ahci.h out/../src/usb-msc.h out/../src/virtio-blk.h \
+ out/../src/floppy.c out/../src/boot.h out/../src/pci.h \
+ out/../src/pci_ids.h out/../src/ata.c out/../src/pci_regs.h \
+ out/../src/blockcmd.h out/../src/mouse.c out/../src/ps2port.h \
+ out/../src/usb-hid.h out/../src/kbd.c out/../src/pci.c \
+ out/../src/paravirt.h out/../src/serial.c out/../src/clock.c \
+ out/../src/pic.c out/../src/cdrom.c out/../src/ps2port.c \
+ out/../src/smp.c out/../src/resume.c out/../src/acpi.h \
+ out/../src/pnpbios.c out/../src/pirtable.c out/../src/vgahooks.c \
+ out/../src/ramdisk.c out/../src/pcibios.c out/../src/blockcmd.c \
+ out/../src/usb.c out/../src/usb-uhci.h out/../src/usb-ohci.h \
+ out/../src/usb-ehci.h out/../src/usb-hub.h out/../src/usb.h \
+ out/../src/usb-uhci.c out/../src/usb-ohci.c out/../src/usb-ehci.c \
+ out/../src/usb-hid.c out/../src/usb-msc.c out/../src/virtio-ring.c \
+ out/../src/virtio-ring.h out/../src/virtio-pci.h out/../src/virtio-pci.c \
+ out/../src/virtio-blk.c out/../src/apm.c out/../src/ahci.c \
+ out/../src/system.c out/../src/disk.c out/../src/font.c

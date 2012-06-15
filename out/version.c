@@ -1,1 +1,1 @@
-const char VERSION[] = "pre-0.6.2-20101102_121942-samarqand";
+const char VERSION[] = "1.6.3-20120615_150237-dhcp-192-168-178-175";

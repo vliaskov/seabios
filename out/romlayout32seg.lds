@@ -4,20 +4,31 @@ OUTPUT_FORMAT("elf32-i386")
 OUTPUT_ARCH("i386")
 SECTIONS
 {
-pcibios32_entry = 0xfe77 ;
-PirOffset = 0xdf78 ;
-apm16protected_entry = 0xc8f2 ;
-apm32protected_entry = 0xc933 ;
+MaxPCIBus = 0xd26c ;
+entry_pcibios32 = 0xc89d ;
+PirOffset = 0xd0a0 ;
+entry_apm16 = 0xc82a ;
+entry_apm32 = 0xc86b ;
 
-    code32seg_start = 0x6228 ;
+    code32seg_start = 0x661b ;
     .text32seg code32seg_start : {
-. = ( 0x6228 - code32seg_start ) ;
-*(.text.pci_next.3747)
-. = ( 0x62d6 - code32seg_start ) ;
+. = ( 0x661b - code32seg_start ) ;
+*(.text.get_global_offset)
+. = ( 0x6627 - code32seg_start ) ;
+*(.text.pci_next)
+. = ( 0x6694 - code32seg_start ) ;
+*(.text.out_str)
+. = ( 0x66b5 - code32seg_start ) ;
+*(.text.set_cf.isra.0)
+. = ( 0x66c3 - code32seg_start ) ;
+*(.text.set_success)
+. = ( 0x66cd - code32seg_start ) ;
+*(.text.set_code_success)
+. = ( 0x66db - code32seg_start ) ;
 *(.text.handle_pcibios32)
-. = ( 0x6605 - code32seg_start ) ;
+. = ( 0x6a1a - code32seg_start ) ;
 *(.text.handle_apm32)
-. = ( 0x67c7 - code32seg_start ) ;
+. = ( 0x6b87 - code32seg_start ) ;
 _rodata = . ;
 *(.rodata.str1.1)
 

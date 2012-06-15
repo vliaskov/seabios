@@ -1,8 +1,10 @@
 	.file	"asm-offsets.c"
 	.section	.text.foo,"ax",@progbits
-.globl foo
+	.globl	foo
 	.type	foo, @function
 foo:
+.LFB29:
+	.cfi_startproc
 #APP
 # 12 "src/asm-offsets.c" 1
 	
@@ -74,6 +76,8 @@ foo:
 # 0 "" 2
 #NO_APP
 	ret
+	.cfi_endproc
+.LFE29:
 	.size	foo, .-foo
-	.ident	"GCC: (Debian 4.4.5-5) 4.4.5"
+	.ident	"GCC: (Debian 4.6.1-4) 4.6.1"
 	.section	.note.GNU-stack,"",@progbits

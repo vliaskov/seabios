@@ -79,6 +79,11 @@ DefinitionBlock (
             {
                 B0EJ, 32,
             }
+            OperationRegion(RMVC, SystemIO, 0xae0c, 0x04)
+            Field(RMVC, DWordAcc, NoLock, WriteAsZeros)
+            {
+                PCRM, 32,
+            }
      Device (S1) { Name (_ADR, 0x00010000) Method (_EJ0,1) { Store(ShiftLeft(1, 0x0001), B0EJ) Return (0x0) } Name (_SUN, 1) }
      Device (S2) { Name (_ADR, 0x00020000) Method (_EJ0,1) { Store(ShiftLeft(1, 0x0002), B0EJ) Return (0x0) } Name (_SUN, 2) }
      Device (S3) { Name (_ADR, 0x00030000) Method (_EJ0,1) { Store(ShiftLeft(1, 0x0003), B0EJ) Return (0x0) } Name (_SUN, 3) }
@@ -177,6 +182,10 @@ DefinitionBlock (
     Scope(\_SB.PCI0) {
         Device (VGA) {
                  Name (_ADR, 0x00020000)
+                 OperationRegion(PCIC, PCI_Config, Zero, 0x4)
+                 Field(PCIC, DWordAcc, NoLock, Preserve) {
+                         VEND, 32
+                 }
                  Method (_S1D, 0, NotSerialized)
                  {
                          Return (0x00)
@@ -187,11 +196,17 @@ DefinitionBlock (
                  }
                  Method (_S3D, 0, NotSerialized)
                  {
-                         Return (0x00)
+                         If (LEqual(VEND, 0x1001b36)) {
+                                 Return (0x03)
+                         } Else {
+                                 Return (0x00)
+                         }
                  }
+                 Method(_RMV) { Return (0x00) }
         }
         Device (ISA) {
             Name (_ADR, 0x00010000)
+            Method(_RMV) { Return (0x00) }
             OperationRegion (P40C, PCI_Config, 0x60, 0x04)
             Device (RTC)
             {
@@ -364,6 +379,35 @@ DefinitionBlock (
   DRSJ, 32
      }
  }
+ Device(SL3) { Name (_ADR, 0x00030000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0003))) { Return (0x1) } Return (0x0) } Name (_SUN, 3) }
+ Device(SL4) { Name (_ADR, 0x00040000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0004))) { Return (0x1) } Return (0x0) } Name (_SUN, 4) }
+ Device(SL5) { Name (_ADR, 0x00050000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0005))) { Return (0x1) } Return (0x0) } Name (_SUN, 5) }
+ Device(SL6) { Name (_ADR, 0x00060000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0006))) { Return (0x1) } Return (0x0) } Name (_SUN, 6) }
+ Device(SL7) { Name (_ADR, 0x00070000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0007))) { Return (0x1) } Return (0x0) } Name (_SUN, 7) }
+ Device(SL8) { Name (_ADR, 0x00080000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0008))) { Return (0x1) } Return (0x0) } Name (_SUN, 8) }
+ Device(SL9) { Name (_ADR, 0x00090000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0009))) { Return (0x1) } Return (0x0) } Name (_SUN, 9) }
+ Device(SL10) { Name (_ADR, 0x000a0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x000a))) { Return (0x1) } Return (0x0) } Name (_SUN, 10) }
+ Device(SL11) { Name (_ADR, 0x000b0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x000b))) { Return (0x1) } Return (0x0) } Name (_SUN, 11) }
+ Device(SL12) { Name (_ADR, 0x000c0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x000c))) { Return (0x1) } Return (0x0) } Name (_SUN, 12) }
+ Device(SL13) { Name (_ADR, 0x000d0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x000d))) { Return (0x1) } Return (0x0) } Name (_SUN, 13) }
+ Device(SL14) { Name (_ADR, 0x000e0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x000e))) { Return (0x1) } Return (0x0) } Name (_SUN, 14) }
+ Device(SL15) { Name (_ADR, 0x000f0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x000f))) { Return (0x1) } Return (0x0) } Name (_SUN, 15) }
+ Device(SL16) { Name (_ADR, 0x00100000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0010))) { Return (0x1) } Return (0x0) } Name (_SUN, 16) }
+ Device(SL17) { Name (_ADR, 0x00110000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0011))) { Return (0x1) } Return (0x0) } Name (_SUN, 17) }
+ Device(SL18) { Name (_ADR, 0x00120000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0012))) { Return (0x1) } Return (0x0) } Name (_SUN, 18) }
+ Device(SL19) { Name (_ADR, 0x00130000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0013))) { Return (0x1) } Return (0x0) } Name (_SUN, 19) }
+ Device(SL20) { Name (_ADR, 0x00140000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0014))) { Return (0x1) } Return (0x0) } Name (_SUN, 20) }
+ Device(SL21) { Name (_ADR, 0x00150000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0015))) { Return (0x1) } Return (0x0) } Name (_SUN, 21) }
+ Device(SL22) { Name (_ADR, 0x00160000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0016))) { Return (0x1) } Return (0x0) } Name (_SUN, 22) }
+ Device(SL23) { Name (_ADR, 0x00170000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0017))) { Return (0x1) } Return (0x0) } Name (_SUN, 23) }
+ Device(SL24) { Name (_ADR, 0x00180000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0018))) { Return (0x1) } Return (0x0) } Name (_SUN, 24) }
+ Device(SL25) { Name (_ADR, 0x00190000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x0019))) { Return (0x1) } Return (0x0) } Name (_SUN, 25) }
+ Device(SL26) { Name (_ADR, 0x001a0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x001a))) { Return (0x1) } Return (0x0) } Name (_SUN, 26) }
+ Device(SL27) { Name (_ADR, 0x001b0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x001b))) { Return (0x1) } Return (0x0) } Name (_SUN, 27) }
+ Device(SL28) { Name (_ADR, 0x001c0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x001c))) { Return (0x1) } Return (0x0) } Name (_SUN, 28) }
+ Device(SL29) { Name (_ADR, 0x001d0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x001d))) { Return (0x1) } Return (0x0) } Name (_SUN, 29) }
+ Device(SL30) { Name (_ADR, 0x001e0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x001e))) { Return (0x1) } Return (0x0) } Name (_SUN, 30) }
+ Device(SL31) { Name (_ADR, 0x001f0000) Method (_RMV) { If (And(\_SB.PCI0.PCRM, ShiftLeft(1, 0x001f))) { Return (0x1) } Return (0x0) } Name (_SUN, 31) }
     }
     Scope(\_SB) {
          Field (\_SB.PCI0.ISA.P40C, ByteAcc, NoLock, Preserve)
@@ -630,8 +674,13 @@ DefinitionBlock (
             Store(DerefOf(Index(CPON, Arg0)), Local0)
             If (Local0) { Return(0xF) } Else { Return(0x0) }
         }
+        OperationRegion(PREJ, SystemIO, 0xaf20, 32)
+        Field (PREJ, ByteAcc, NoLock, Preserve)
+        {
+            PRE, 256
+        }
         Method (CPEJ, 2, NotSerialized) {
-            Sleep(200)
+            Store(ShiftLeft(1, Arg0), PRE)
         }
         OperationRegion(PRST, SystemIO, 0xaf00, 32)
         Field (PRST, ByteAcc, NoLock, Preserve)
@@ -661,6 +710,50 @@ DefinitionBlock (
                 Increment(Local0)
             }
             Return(One)
+        }
+        External(MTFY, MethodObj)
+        External(MEON, PkgObj)
+        Method (CMST, 1, NotSerialized) {
+            Store(DerefOf(Index(MEON, Arg0)), Local0)
+            If (Local0) { Return(0xF) } Else { Return(0x0) }
+        }
+        OperationRegion(MEST, SystemIO, 0xaf40, 128)
+        Field (MEST, ByteAcc, NoLock, Preserve)
+        {
+            MES, 1024
+        }
+        OperationRegion(MEMJ, SystemIO, 0xafc0, 1)
+        Field (MEMJ, ByteAcc, NoLock, Preserve)
+        {
+            MPE, 8
+        }
+        Method(MESC, 0) {
+            Store (MES, Local5)
+            Store (Zero, Local2)
+            Store (Zero, Local0)
+            While (LLess(Local0, SizeOf(MEON))) {
+                Store(DerefOf(Index(MEON, Local0)), Local1)
+                If (And(Local0, 0x07)) {
+                    ShiftRight(Local2, 1, Local2)
+                } Else {
+                    Store(DerefOf(Index(Local5, ShiftRight(Local0, 3))), Local2)
+                }
+                Store(And(Local2, 1), Local3)
+                If (LNotEqual(Local1, Local3)) {
+                    Store(Local3, Index(MEON, Local0))
+                    If (LEqual(Local3, 1)) {
+                        MTFY(Local0, 1)
+                    } Else {
+                        MTFY(Local0, 3)
+                    }
+                }
+                Increment(Local0)
+            }
+            Return(One)
+        }
+        Method (MPEJ, 2, NotSerialized) {
+            Store(Arg0, MPE)
+            Sleep(200)
         }
     }
     Scope (\_GPE)
@@ -706,8 +799,8 @@ DefinitionBlock (
         Method(_L02) {
             Return(\_SB.PRSC())
         }
-        Method(_L03) {
-            Return(0x01)
+        Method(_E03) {
+            Return(\_SB.MESC())
         }
         Method(_L04) {
             Return(0x01)

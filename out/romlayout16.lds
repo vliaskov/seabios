@@ -4,365 +4,435 @@ OUTPUT_FORMAT("elf32-i386")
 OUTPUT_ARCH("i386")
 SECTIONS
 {
-Zones = 0xf6110 ;
-s3_resume = 0xf4f05 ;
-ZoneLow = 0xf613c ;
-ZoneTmpHigh = 0xf614c ;
-ZoneTmpLow = 0xf6148 ;
-ZoneHigh = 0xf6140 ;
-_start = 0xf4df5 ;
-handle_apm32 = 0x6605 ;
-handle_19 = 0xf4d71 ;
-handle_18 = 0xf4d46 ;
-handle_pcibios32 = 0x62d6 ;
+_cfunc32flat_pci_writel_32 = 0xf4cdb ;
+_cfunc32flat_pci_readl_32 = 0xf4cd8 ;
+_cfunc32flat_handle_resume32 = 0xf4ce3 ;
+_cfunc32flat_handle_pmm = 0xed7e4 ;
+_cfunc32seg_handle_apm32 = 0x6a1a ;
+_cfunc32seg_handle_pcibios32 = 0x66db ;
+_cfunc32flat_handle_post = 0xf4ed3 ;
+_cfunc32flat_handle_19 = 0xf4f41 ;
+_cfunc32flat_handle_18 = 0xf4f16 ;
 
-    code16_start = 0x67e0 ;
+    code16_start = 0x6ba0 ;
     .text16 code16_start : {
-. = ( 0x67e0 - code16_start ) ;
+. = ( 0x6ba0 - code16_start ) ;
+*(.text.eoi_pic2)
+. = ( 0x6ba8 - code16_start ) ;
+*(.text.wait_irq)
+. = ( 0x6bae - code16_start ) ;
+*(.text.memcpy_fl)
+. = ( 0x6be6 - code16_start ) ;
+*(.text.send_disk_op)
+. = ( 0x6c26 - code16_start ) ;
+*(.text.lba2chs)
+. = ( 0x6c79 - code16_start ) ;
+*(.text.process_mouse)
+. = ( 0x6d10 - code16_start ) ;
+*(.text.dequeue_key)
+. = ( 0x6df8 - code16_start ) ;
+*(.text.pci_next)
+. = ( 0x6e85 - code16_start ) ;
+*(.text.tscdelay)
+. = ( 0x6ed0 - code16_start ) ;
+*(.text.msleep)
+. = ( 0x6f17 - code16_start ) ;
+*(.text.usb_poll_intr)
+. = ( 0x7328 - code16_start ) ;
+*(.text.out_str)
+. = ( 0x7340 - code16_start ) ;
+*(.text.set_a20)
+. = ( 0x735e - code16_start ) ;
+*(.text.set_cf.isra.0)
+. = ( 0x736f - code16_start ) ;
+*(.text.set_success)
+. = ( 0x7379 - code16_start ) ;
+*(.text.set_code_success)
+. = ( 0x7388 - code16_start ) ;
+*(.text.handle_1553)
+. = ( 0x74ee - code16_start ) ;
+*(.text.putuint.isra.6)
+. = ( 0x7536 - code16_start ) ;
+*(.text.putsinglehex.isra.7)
+. = ( 0x7551 - code16_start ) ;
+*(.text.__dprintf)
+. = ( 0x7565 - code16_start ) ;
+*(.text.process_key)
+. = ( 0x7596 - code16_start ) ;
+*(.text.__warn_timeout)
+. = ( 0x75bb - code16_start ) ;
+*(.text.dump_regs)
+. = ( 0x76a0 - code16_start ) ;
+*(.text.panic)
+. = ( 0x76b6 - code16_start ) ;
+*(.text.getComAddr)
+. = ( 0x76ee - code16_start ) ;
+*(.text.__set_code_invalid.isra.14)
+. = ( 0x76ff - code16_start ) ;
+*(.text.__set_code_unimplemented.isra.15)
+. = ( 0x7710 - code16_start ) ;
+*(.text.floppy_pio)
+. = ( 0x77e9 - code16_start ) ;
+*(.text.check_recal_drive)
+. = ( 0x78bc - code16_start ) ;
+*(.text.floppy_cmd.isra.17)
+. = ( 0x79a1 - code16_start ) ;
+*(.text.process_floppy_op)
+. = ( 0x7d33 - code16_start ) ;
+*(.text.rtc_updating)
+. = ( 0x7dcb - code16_start ) ;
+*(.text.set_usertimer)
+. = ( 0x7e6f - code16_start ) ;
+*(.text.clear_usertimer)
+. = ( 0x7ec5 - code16_start ) ;
+*(.text.__disk_ret.isra.37)
+. = ( 0x7ef4 - code16_start ) ;
+*(.text.extended_access)
+. = ( 0x7fb2 - code16_start ) ;
+*(.text.disk_1300)
+. = ( 0x7fe7 - code16_start ) ;
+*(.text.disk_1310)
+. = ( 0x801f - code16_start ) ;
+*(.text.fillLCHS)
+. = ( 0x8083 - code16_start ) ;
+*(.text.disk_1308)
+. = ( 0x81bd - code16_start ) ;
+*(.text.disk_1315)
+. = ( 0x8249 - code16_start ) ;
+*(.text.disk_1346.isra.54)
+. = ( 0x82ff - code16_start ) ;
+*(.text.disk_13)
+. = ( 0x8d87 - code16_start ) ;
+*(.text.prockeys)
+. = ( 0x8dd1 - code16_start ) ;
+*(.text.procmodkey)
+. = ( 0x8e28 - code16_start ) ;
+*(.text.procscankey.part.64)
+. = ( 0x8e45 - code16_start ) ;
+*(.text.handle_key)
+. = ( 0x8fbf - code16_start ) ;
+*(.text.ehci_wait_td.isra.65)
+. = ( 0x9080 - code16_start ) ;
+*(.text.ehci_send_bulk)
+. = ( 0x93f7 - code16_start ) ;
+*(.text.wait_td.isra.67)
+. = ( 0x94c0 - code16_start ) ;
+*(.text.uhci_send_bulk)
+. = ( 0x982f - code16_start ) ;
+*(.text.i8042_wait_write)
+. = ( 0x986c - code16_start ) ;
+*(.text.__i8042_command)
+. = ( 0x9931 - code16_start ) ;
+*(.text.ps2_recvbyte)
+. = ( 0x9a47 - code16_start ) ;
+*(.text.ps2_sendbyte)
+. = ( 0x9abb - code16_start ) ;
+*(.text.mouse_command)
+. = ( 0x9b92 - code16_start ) ;
+*(.text.mouse_15c201)
+. = ( 0x9be2 - code16_start ) ;
+*(.text.call32.part.76)
+. = ( 0x9c6f - code16_start ) ;
+*(.text.vring_add_buf.constprop.77)
+. = ( 0x9f67 - code16_start ) ;
+*(.text.await_ide.constprop.78)
+. = ( 0xa021 - code16_start ) ;
+*(.text.await_not_bsy)
+. = ( 0xa030 - code16_start ) ;
+*(.text.ndelay_await_not_bsy)
+. = ( 0xa05f - code16_start ) ;
+*(.text.ata_wait_data)
+. = ( 0xa087 - code16_start ) ;
+*(.text.send_cmd)
+. = ( 0xa18d - code16_start ) ;
+*(.text.ata_readwrite)
+. = ( 0xa30e - code16_start ) ;
+*(.text.process_ata_misc_op)
+. = ( 0xa4cd - code16_start ) ;
+*(.text.virtio_blk_op)
+. = ( 0xa7ff - code16_start ) ;
 *(.text.handle_12)
-. = ( 0x67f3 - code16_start ) ;
+. = ( 0xa812 - code16_start ) ;
 *(.text.handle_11)
-. = ( 0x6806 - code16_start ) ;
+. = ( 0xa825 - code16_start ) ;
+*(.text.handle_05)
+. = ( 0xa855 - code16_start ) ;
 *(.text.handle_02)
-. = ( 0x682a - code16_start ) ;
+. = ( 0xa879 - code16_start ) ;
 *(.text.handle_75)
-. = ( 0x6876 - code16_start ) ;
-*(.text.allocSpace.3243)
-. = ( 0x6940 - code16_start ) ;
-*(.text.freeSpace.3524)
-. = ( 0x699a - code16_start ) ;
-*(.text.pmm_free.1862)
-. = ( 0x6a17 - code16_start ) ;
-*(.text.floppy_cmd.12638)
-. = ( 0x6b13 - code16_start ) ;
-*(.text.check_recal_drive.12920)
-. = ( 0x6bdc - code16_start ) ;
-*(.text.lba2chs.13002)
-. = ( 0x6c2f - code16_start ) ;
-*(.text.process_floppy_op.1221)
-. = ( 0x6f89 - code16_start ) ;
-*(.text.handle_0e)
-. = ( 0x6ff4 - code16_start ) ;
-*(.text.process_mouse.1711)
-. = ( 0x708d - code16_start ) ;
-*(.text.pci_next.14700)
-. = ( 0x7172 - code16_start ) ;
-*(.text.handle_14)
-. = ( 0x73e7 - code16_start ) ;
-*(.text.handle_17)
-. = ( 0x7592 - code16_start ) ;
-*(.text.rtc_updating.25343)
-. = ( 0x7644 - code16_start ) ;
-*(.text.handle_70)
-. = ( 0x773d - code16_start ) ;
-*(.text.handle_1ab1.1764)
-. = ( 0x7aa0 - code16_start ) ;
-*(.text.handle_hwpic2)
-. = ( 0x7aa8 - code16_start ) ;
-*(.text.usb_poll_intr.42677)
-. = ( 0x7eb6 - code16_start ) ;
-*(.text.usb_check_mouse.51624)
-. = ( 0x7f61 - code16_start ) ;
-*(.text.basic_access.62538)
-. = ( 0x8132 - code16_start ) ;
-*(.text.extended_access.62602)
-. = ( 0x829e - code16_start ) ;
-*(.text.disk_1300.62721)
-. = ( 0x833e - code16_start ) ;
-*(.text.disk_1310.63040)
-. = ( 0x83de - code16_start ) ;
-*(.text.disk_1346.63275)
-. = ( 0x8517 - code16_start ) ;
-*(.text.handle_76)
-. = ( 0x852d - code16_start ) ;
-*(.text.T.2327)
-. = ( 0x8575 - code16_start ) ;
-*(.text.T.2329)
-. = ( 0x8896 - code16_start ) ;
-*(.text.panic.1648)
-. = ( 0x88ac - code16_start ) ;
-*(.text.dump_regs.7898)
-. = ( 0x8943 - code16_start ) ;
-*(.text.__process_key.20381)
-. = ( 0x8ca9 - code16_start ) ;
-*(.text.process_key.1707)
-. = ( 0x8cde - code16_start ) ;
-*(.text.prockeys.51301)
-. = ( 0x8d28 - code16_start ) ;
-*(.text.handle_key.51401)
-. = ( 0x8f75 - code16_start ) ;
-*(.text.usb_check_key.51512)
-. = ( 0x8fae - code16_start ) ;
-*(.text.await_not_bsy.14871)
-. = ( 0x9075 - code16_start ) ;
-*(.text.ata_pio_transfer.15388)
-. = ( 0x91dd - code16_start ) ;
-*(.text.ndelay_await_not_bsy.14892)
-. = ( 0x9248 - code16_start ) ;
-*(.text.send_cmd.15132)
-. = ( 0x9350 - code16_start ) ;
-*(.text.ata_readwrite.15917)
-. = ( 0x9523 - code16_start ) ;
-*(.text.process_ata_misc_op.15100)
-. = ( 0x9777 - code16_start ) ;
-*(.text.i8042_wait_write.31345)
-. = ( 0x97bf - code16_start ) ;
-*(.text.i8042_command.31420)
-. = ( 0x988c - code16_start ) ;
-*(.text.ps2_recvbyte.31457)
-. = ( 0x99a3 - code16_start ) ;
-*(.text.ps2_sendbyte.31499)
-. = ( 0x9a19 - code16_start ) ;
-*(.text.mouse_command.17861)
-. = ( 0x9aa3 - code16_start ) ;
-*(.text.handle_15c2.1705)
-. = ( 0x9d2b - code16_start ) ;
+. = ( 0xa8c5 - code16_start ) ;
+*(.text.call32)
+. = ( 0xa8db - code16_start ) ;
+*(.text.ahci_ctrl_writel)
+. = ( 0xa91b - code16_start ) ;
+*(.text.ahci_port_writel)
+. = ( 0xa938 - code16_start ) ;
+*(.text.ahci_port_readl)
+. = ( 0xa95e - code16_start ) ;
+*(.text.ahci_command)
+. = ( 0xade8 - code16_start ) ;
+*(.text.ahci_disk_readwrite)
+. = ( 0xaece - code16_start ) ;
+*(.text.cdb_read)
+. = ( 0xb298 - code16_start ) ;
+*(.text.process_op)
+. = ( 0xb4b5 - code16_start ) ;
+*(.text.__send_disk_op)
+. = ( 0xb505 - code16_start ) ;
 *(.text.handle_16)
-. = ( 0x9f60 - code16_start ) ;
+. = ( 0xb6d4 - code16_start ) ;
+*(.text.handle_14)
+. = ( 0xb920 - code16_start ) ;
+*(.text.handle_17)
+. = ( 0xbac2 - code16_start ) ;
+*(.text.handle_1a)
+. = ( 0xc09d - code16_start ) ;
+*(.text.handle_08)
+. = ( 0xc1d9 - code16_start ) ;
+*(.text.handle_70)
+. = ( 0xc27d - code16_start ) ;
+*(.text.handle_hwpic1)
+. = ( 0xc283 - code16_start ) ;
 *(.text.handle_74)
-. = ( 0x9fa9 - code16_start ) ;
+. = ( 0xc2cc - code16_start ) ;
 *(.text.handle_09)
-. = ( 0x9ff2 - code16_start ) ;
+. = ( 0xc31a - code16_start ) ;
 *(.text.handle_resume)
-. = ( 0xa0a0 - code16_start ) ;
+. = ( 0xc3f1 - code16_start ) ;
 *(.text.handle_pnp)
-. = ( 0xa0e8 - code16_start ) ;
-*(.text.wait_td.45040)
-. = ( 0xa1b4 - code16_start ) ;
-*(.text.uhci_send_bulk.42390)
-. = ( 0xa500 - code16_start ) ;
-*(.text.ehci_wait_td.49174)
-. = ( 0xa5c3 - code16_start ) ;
-*(.text.ehci_send_bulk.42493)
-. = ( 0xa966 - code16_start ) ;
-*(.text.usb_send_bulk.42666)
-. = ( 0xa9d7 - code16_start ) ;
-*(.text.disk_1305.62793)
-. = ( 0xab50 - code16_start ) ;
-*(.text.disk_13.64841)
-. = ( 0xb9f3 - code16_start ) ;
-*(.text.handle_legacy_disk.64912)
-. = ( 0xbae9 - code16_start ) ;
+. = ( 0xc444 - code16_start ) ;
 *(.text.handle_40)
-. = ( 0xbb1b - code16_start ) ;
-*(.text.T.2325)
-. = ( 0xbe3d - code16_start ) ;
-*(.text.virtio_blk_op.57727)
-. = ( 0xc16b - code16_start ) ;
-*(.text.__send_disk_op.11050)
-. = ( 0xc1b9 - code16_start ) ;
-*(.text.cdemu_read.28725)
-. = ( 0xc405 - code16_start ) ;
-*(.text.T.2326)
-. = ( 0xc57b - code16_start ) ;
-*(.text.handle_pmm)
-. = ( 0xc727 - code16_start ) ;
+. = ( 0xc481 - code16_start ) ;
+*(.text.handle_13)
+. = ( 0xc630 - code16_start ) ;
+*(.text.handle_76)
+. = ( 0xc641 - code16_start ) ;
+*(.text.asm.transition32)
+. = ( 0xc687 - code16_start ) ;
 *(.text.asm.transition16)
-. = ( 0xc77b - code16_start ) ;
+. = ( 0xc6dc - code16_start ) ;
 *(.text.asm.__call16)
-. = ( 0xc7fe - code16_start ) ;
+. = ( 0xc75f - code16_start ) ;
 *(.text.asm.__call16_from32)
-. = ( 0xc81b - code16_start ) ;
+. = ( 0xc783 - code16_start ) ;
 *(.text.asm.irq_trampoline_0x10)
-. = ( 0xc81e - code16_start ) ;
-*(.text.asm.entry_post)
-. = ( 0xc87d - code16_start ) ;
+. = ( 0xc786 - code16_start ) ;
+*(.text.asm.irq_trampoline_0x13)
+. = ( 0xc789 - code16_start ) ;
+*(.text.asm.irq_trampoline_0x15)
+. = ( 0xc78c - code16_start ) ;
+*(.text.asm.irq_trampoline_0x16)
+. = ( 0xc78f - code16_start ) ;
+*(.text.asm.irq_trampoline_0x18)
+. = ( 0xc792 - code16_start ) ;
+*(.text.asm.entry_resume)
+. = ( 0xc7a9 - code16_start ) ;
 *(.text.asm.entry_pmm)
-. = ( 0xc8ba - code16_start ) ;
+. = ( 0xc7f2 - code16_start ) ;
 *(.text.asm.entry_pnp_real)
-. = ( 0xc8f2 - code16_start ) ;
-*(.text.asm.apm16protected_entry)
-. = ( 0xc933 - code16_start ) ;
-*(.text.asm.apm32protected_entry)
-. = ( 0xc965 - code16_start ) ;
-*(.text.asm.export.post32)
-. = ( 0xc990 - code16_start ) ;
+. = ( 0xc82a - code16_start ) ;
+*(.text.asm.entry_apm16)
+. = ( 0xc86b - code16_start ) ;
+*(.text.asm.entry_apm32)
+. = ( 0xc89d - code16_start ) ;
+*(.text.asm.entry_pcibios32)
+. = ( 0xc8cb - code16_start ) ;
+*(.text.asm.export.entry_bios32)
+. = ( 0xc8ea - code16_start ) ;
+*(.text.asm.export.entry_elf)
+. = ( 0xc915 - code16_start ) ;
 *(.text.asm.irqentry)
-. = ( 0xc9bc - code16_start ) ;
-*(.text.asm.irqentryarg)
-. = ( 0xc9fd - code16_start ) ;
+. = ( 0xc941 - code16_start ) ;
 *(.text.asm.entry_13)
-. = ( 0xca06 - code16_start ) ;
+. = ( 0xc94a - code16_start ) ;
+*(.text.asm.entry_76)
+. = ( 0xc953 - code16_start ) ;
+*(.text.asm.entry_70)
+. = ( 0xc95c - code16_start ) ;
+*(.text.asm.entry_74)
+. = ( 0xc965 - code16_start ) ;
+*(.text.asm.entry_75)
+. = ( 0xc96e - code16_start ) ;
+*(.text.asm.entry_hwpic1)
+. = ( 0xc977 - code16_start ) ;
 *(.text.asm.entry_19)
-. = ( 0xca19 - code16_start ) ;
+. = ( 0xc98a - code16_start ) ;
 *(.text.asm.entry_18)
-. = ( 0xca2c - code16_start ) ;
+. = ( 0xc99d - code16_start ) ;
 _rodata = . ;
 *(.rodata.str1.1)
-. = ( 0xcd58 - code16_start ) ;
-*(.rodata.__func__.2165)
+. = ( 0xccb0 - code16_start ) ;
+*(.rodata.__func__.1874)
+. = ( 0xccbc - code16_start ) ;
+*(.rodata.__func__.1882)
+. = ( 0xccc8 - code16_start ) ;
+*(.rodata.__func__.1905)
+. = ( 0xccd4 - code16_start ) ;
+*(.rodata.__func__.5834)
+. = ( 0xcce8 - code16_start ) ;
+*(.rodata.__func__.5886)
+. = ( 0xccf8 - code16_start ) ;
+*(.rodata.__func__.5825)
+. = ( 0xcd08 - code16_start ) ;
+*(.rodata.__func__.10135)
+. = ( 0xcd14 - code16_start ) ;
+*(.rodata.__func__.3639)
+. = ( 0xcd20 - code16_start ) ;
+*(.rodata.__func__.3681)
+. = ( 0xcd2c - code16_start ) ;
+*(.rodata.__func__.7034)
+. = ( 0xcd3c - code16_start ) ;
+*(.rodata.__func__.7107)
+. = ( 0xcd44 - code16_start ) ;
+*(.rodata.__func__.7728)
+. = ( 0xcd54 - code16_start ) ;
+*(.rodata.__func__.9023)
 . = ( 0xcd64 - code16_start ) ;
-*(.rodata.__func__.2106)
-. = ( 0xcd70 - code16_start ) ;
-*(.rodata.__func__.2094)
-. = ( 0xcd7c - code16_start ) ;
-*(.rodata.__func__.3783)
-. = ( 0xcd88 - code16_start ) ;
-*(.rodata.__func__.14924)
-. = ( 0xcd94 - code16_start ) ;
-*(.rodata.__func__.14856)
-. = ( 0xcda0 - code16_start ) ;
-*(.rodata.__func__.31352)
-. = ( 0xcdb4 - code16_start ) ;
-*(.rodata.__func__.31462)
-. = ( 0xcdc4 - code16_start ) ;
-*(.rodata.__func__.31334)
-. = ( 0xcdd4 - code16_start ) ;
-*(.rodata.__func__.45045)
-. = ( 0xcddc - code16_start ) ;
-*(.rodata.__func__.44820)
-. = ( 0xcdec - code16_start ) ;
-*(.rodata.__func__.49179)
-. = ( 0xcdfc - code16_start ) ;
-*(.rodata.__func__.54923)
-. = ( 0xce0c - code16_start ) ;
-*(.rodata.__func__.62795)
-. = ( 0xce18 - code16_start ) ;
-*(.rodata.__func__.64939)
-. = ( 0xce24 - code16_start ) ;
-*(.data16.src/misc.c.132)
-. = ( 0xce2c - code16_start ) ;
-*(.data16.src/misc.c.142)
-. = ( 0xce38 - code16_start ) ;
-*(.data16.src/misc.c.148)
-. = ( 0xce70 - code16_start ) ;
-*(.data16.src/misc.c.166)
-. = ( 0xce80 - code16_start ) ;
-*(.data16.export.src/pmm.c.447)
-. = ( 0xce90 - code16_start ) ;
-*(.data16.src/floppy.c.28)
-. = ( 0xcea0 - code16_start ) ;
-*(.data16.src/floppy.c.70)
-. = ( 0xcee8 - code16_start ) ;
-*(.data16.src/mouse.c.122)
-. = ( 0xcef0 - code16_start ) ;
-*(.data16.src/kbd.c.289)
+*(.rodata.__func__.8472)
+. = ( 0xcd74 - code16_start ) ;
+*(.rodata.__func__.9489)
+. = ( 0xcd80 - code16_start ) ;
+*(.data16.out/../src/system.c.295)
+. = ( 0xcd84 - code16_start ) ;
+*(.data16.out/../src/system.c.294)
+. = ( 0xd004 - code16_start ) ;
+*(.data16.out/../src/usb-hid.c.15)
+. = ( 0xd008 - code16_start ) ;
+*(.data16.out/../src/usb-hid.c.14)
+. = ( 0xd010 - code16_start ) ;
+*(.data16.export.out/../src/pcibios.c.225)
+. = ( 0xd020 - code16_start ) ;
+*(.data16.export.out/../src/pirtable.c.21)
+. = ( 0xd0a0 - code16_start ) ;
+*(.data16.out/../src/pirtable.c.12)
+. = ( 0xd0b0 - code16_start ) ;
+*(.data16.export.out/../src/pnpbios.c.31)
+. = ( 0xd0d4 - code16_start ) ;
+*(.data16.out/../src/resume.c.18)
+. = ( 0xd0d8 - code16_start ) ;
+*(.data16.out/../src/smp.c.38)
+. = ( 0xd0dc - code16_start ) ;
+*(.data16.out/../src/smp.c.37)
+. = ( 0xd0e0 - code16_start ) ;
+*(.data16.out/../src/smp.c.21)
+. = ( 0xd0e4 - code16_start ) ;
+*(.data16.out/../src/smp.c.20)
+. = ( 0xd264 - code16_start ) ;
+*(.data16.out/../src/cdrom.c.20)
+. = ( 0xd268 - code16_start ) ;
+*(.data16.out/../src/clock.c.59)
+. = ( 0xd26c - code16_start ) ;
+*(.data16.out/../src/pci.c.89)
 . = ( 0xd270 - code16_start ) ;
-*(.data16.export.src/pnpbios.c.31)
-. = ( 0xd2a0 - code16_start ) ;
-*(.data16.export.src/pirtable.c.21)
-. = ( 0xd320 - code16_start ) ;
-*(.data16.src/vgahooks.c.16)
-. = ( 0xd330 - code16_start ) ;
-*(.data16.export.src/pcibios.c.222)
-. = ( 0xd340 - code16_start ) ;
-*(.data16.src/usb-hid.c.156)
-. = ( 0xd350 - code16_start ) ;
-*(.data16.src/usb-hid.c.139)
-. = ( 0xd418 - code16_start ) ;
-*(.data16.src/block.c.16)
-. = ( 0xd4dc - code16_start ) ;
-*(.data16.src/cdrom.c.20)
-. = ( 0xd4e0 - code16_start ) ;
-*(.data16.src/misc.c.14)
-. = ( 0xd4e4 - code16_start ) ;
-*(.data16.src/smp.c.35)
-. = ( 0xd4e8 - code16_start ) ;
-*(.data16.src/smp.c.36)
-. = ( 0xd4f0 - code16_start ) ;
-*(.data16.src/misc.c.18)
-. = ( 0xdcf0 - code16_start ) ;
-*(.data16.src/misc.c.139)
-. = ( 0xdcf4 - code16_start ) ;
-*(.data16.src/system.c.294)
-. = ( 0xdf74 - code16_start ) ;
-*(.data16.src/system.c.295)
-. = ( 0xdf78 - code16_start ) ;
-*(.data16.src/pirtable.c.12)
-. = ( 0xdf7c - code16_start ) ;
-*(.data16.src/clock.c.59)
+*(.data16.out/../src/floppy.c.73)
+. = ( 0xd2b8 - code16_start ) ;
+*(.data16.out/../src/floppy.c.31)
+. = ( 0xd2c8 - code16_start ) ;
+*(.data16.out/../src/block.c.20)
+. = ( 0xd2cc - code16_start ) ;
+*(.data16.out/../src/block.c.19)
+. = ( 0xd38c - code16_start ) ;
+*(.data16.out/../src/block.c.17)
+. = ( 0xd390 - code16_start ) ;
+*(.data16.export.out/../src/pmm.c.448)
+. = ( 0xd3a0 - code16_start ) ;
+*(.data16.out/../src/misc.c.166)
+. = ( 0xd3a8 - code16_start ) ;
+*(.data16.out/../src/misc.c.148)
+. = ( 0xd3e0 - code16_start ) ;
+*(.data16.out/../src/misc.c.142)
+. = ( 0xd3e6 - code16_start ) ;
+*(.data16.out/../src/misc.c.139)
+. = ( 0xd3e8 - code16_start ) ;
+*(.data16.out/../src/misc.c.132)
+. = ( 0xd3f0 - code16_start ) ;
+*(.data16.out/../src/misc.c.18)
+. = ( 0xdbf0 - code16_start ) ;
+*(.data16.out/../src/misc.c.14)
+. = ( 0xdbf4 - code16_start ) ;
+*(.data16.out/../src/usb-hid.c.156)
+. = ( 0xdc04 - code16_start ) ;
+*(.data16.out/../src/kbd.c.289)
 . = ( 0xdf80 - code16_start ) ;
-*(.data16.src/cdrom.c.21)
-. = ( 0xdf84 - code16_start ) ;
-*(.data16.src/smp.c.20)
-. = ( 0xe044 - code16_start ) ;
-*(.data16.src/smp.c.21)
+*(.data16.out/../src/usb-hid.c.139)
 . = ( 0xe048 - code16_start ) ;
-*(.data16.src/usb-hid.c.14)
-. = ( 0xe04c - code16_start ) ;
-*(.data16.src/usb-hid.c.15)
+*(.data16.out/../src/mouse.c.104)
 . = ( 0xe05b - code16_start ) ;
 *(.fixedaddr.0xe05b)
-. = ( 0xe05e - code16_start ) ;
-*(.text.__ps2_command.31521)
-. = ( 0xe2b8 - code16_start ) ;
-*(.text.asm.entry_75)
+. = ( 0xe079 - code16_start ) ;
+*(.text.__ps2_command)
+. = ( 0xe2ba - code16_start ) ;
+*(.text.asm.entry_hwpic2)
 . = ( 0xe2c3 - code16_start ) ;
 *(.fixedaddr.0xe2c3)
 . = ( 0xe2cc - code16_start ) ;
-*(.text.process_op.1208)
-. = ( 0xe3f1 - code16_start ) ;
-*(.text.asm.entry_hwpic1)
-. = ( 0xe3fa - code16_start ) ;
-*(.text.asm.irq_trampoline_0x18)
+*(.text.basic_access)
 . = ( 0xe3fe - code16_start ) ;
 *(.fixedaddr.0xe3fe)
 . = ( 0xe401 - code16_start ) ;
 *(.fixedaddr.0xe401)
 . = ( 0xe411 - code16_start ) ;
-*(.text.handle_1a)
-. = ( 0xe6e7 - code16_start ) ;
-*(.text.asm.entry_74)
+*(.text.ahci_disk_readwrite_aligned)
+. = ( 0xe67f - code16_start ) ;
+*(.text.handle_0e)
+. = ( 0xe6ea - code16_start ) ;
+*(.text.yield)
 . = ( 0xe6f2 - code16_start ) ;
 *(.fixedaddr.0xe6f2)
 . = ( 0xe6f5 - code16_start ) ;
 *(.fixedaddr.0xe6f5)
 . = ( 0xe6ff - code16_start ) ;
-*(.text.handle_05)
+*(.text.disk_13XX.isra.62)
 . = ( 0xe729 - code16_start ) ;
 *(.fixedaddr.0xe729)
 . = ( 0xe739 - code16_start ) ;
 *(.fixedaddr.0xe739)
 . = ( 0xe742 - code16_start ) ;
-*(.text.dequeue_key.19941)
+*(.text.disk_1305)
+. = ( 0xe82b - code16_start ) ;
+*(.text.asm.out/../src/stacks.c.97)
 . = ( 0xe82e - code16_start ) ;
 *(.fixedaddr.0xe82e)
 . = ( 0xe837 - code16_start ) ;
-*(.text.floppy_pio.12615)
-. = ( 0xe97a - code16_start ) ;
-*(.text.asm.entry_76)
+*(.text.ata_pio_transfer)
 . = ( 0xe983 - code16_start ) ;
-*(.text.asm.irq_trampoline_0x16)
+*(.text.asm.out/../src/stacks.c.127)
 . = ( 0xe987 - code16_start ) ;
 *(.fixedaddr.0xe987)
 . = ( 0xe990 - code16_start ) ;
-*(.text.pmm_malloc.1860)
-. = ( 0xec54 - code16_start ) ;
-*(.text.asm.irq_trampoline_0x15)
+*(.text.bvprintf.isra.9)
+. = ( 0xec20 - code16_start ) ;
+*(.text.getLptAddr)
 . = ( 0xec59 - code16_start ) ;
 *(.fixedaddr.0xec59)
 . = ( 0xec62 - code16_start ) ;
-*(.text.cdb_read.14847)
+*(.text.__process_key)
 . = ( 0xef52 - code16_start ) ;
-*(.text.asm.irq_trampoline_0x13)
+*(.text.asm.irq_trampoline_0x19)
 . = ( 0xef57 - code16_start ) ;
 *(.fixedaddr.0xef57)
 . = ( 0xef60 - code16_start ) ;
-*(.text.udelay.1732)
-. = ( 0xefc2 - code16_start ) ;
-*(.text.asm.irq_trampoline_0x19)
+*(.text.usb_send_bulk)
 . = ( 0xefc7 - code16_start ) ;
 *(.fixedaddr.0xefc7)
 . = ( 0xefd2 - code16_start ) ;
 *(.fixedaddr.0xefd2)
 . = ( 0xefdb - code16_start ) ;
-*(.text.pmm_getspace.4532)
+*(.text.enqueue_key)
 . = ( 0xf045 - code16_start ) ;
 *(.fixedaddr.0xf045)
 . = ( 0xf046 - code16_start ) ;
-*(.text.asm.export.bios32_entry)
+*(.text.udelay)
 . = ( 0xf065 - code16_start ) ;
 *(.fixedaddr.0xf065)
 . = ( 0xf06e - code16_start ) ;
-*(.text.asm.src/smp.c.66)
+*(.text.asm.out/../src/smp.c.68)
 . = ( 0xf0a4 - code16_start ) ;
 *(.fixedaddr.0xf0a4)
 . = ( 0xf0fc - code16_start ) ;
 *(.text.handle_15)
-. = ( 0xf6ac - code16_start ) ;
-*(.text.handle_1553.1762)
-. = ( 0xf836 - code16_start ) ;
-*(.text.asm.entry_70)
+. = ( 0xf800 - code16_start ) ;
+*(.text.asm.irqentryarg)
 . = ( 0xf841 - code16_start ) ;
 *(.fixedaddr.0xf841)
 . = ( 0xf84a - code16_start ) ;
@@ -370,41 +440,37 @@ _rodata = . ;
 . = ( 0xf84d - code16_start ) ;
 *(.fixedaddr.0xf84d)
 . = ( 0xf856 - code16_start ) ;
-*(.text.asm.src/stacks.c.132)
+*(.text.handle_hwpic2)
 . = ( 0xf859 - code16_start ) ;
 *(.fixedaddr.0xf859)
 . = ( 0xf862 - code16_start ) ;
-*(.text.handle_13)
-. = ( 0xfa5a - code16_start ) ;
-*(.text.__dprintf.1656)
+*(.text.cdemu_read)
+. = ( 0xfa3b - code16_start ) ;
+*(.text.getDrive)
 . = ( 0xfa6e - code16_start ) ;
 *(.fixedaddr.0xfa6e)
 . = ( 0xfe6e - code16_start ) ;
 *(.fixedaddr.0xfe6e)
 . = ( 0xfe77 - code16_start ) ;
-*(.text.asm.pcibios32_entry)
+*(.text.init_rtc)
 . = ( 0xfea5 - code16_start ) ;
 *(.fixedaddr.0xfea5)
 . = ( 0xfeae - code16_start ) ;
-*(.text.asm.transition32)
+*(.text.wait_floppy_irq)
 . = ( 0xfef3 - code16_start ) ;
 *(.fixedaddr.0xfef3)
 . = ( 0xff00 - code16_start ) ;
 *(.fixedaddr.0xff00)
 . = ( 0xff45 - code16_start ) ;
-*(.text.asm.entry_hwpic2)
-. = ( 0xff4e - code16_start ) ;
-*(.text.asm.src/stacks.c.102)
-. = ( 0xff51 - code16_start ) ;
-*(.text.handle_10)
+*(.text.__set_invalid.isra.12)
 . = ( 0xff53 - code16_start ) ;
 *(.fixedaddr.0xff53)
 . = ( 0xff54 - code16_start ) ;
 *(.fixedaddr.0xff54)
 . = ( 0xff5d - code16_start ) ;
-*(.text.handle_08)
-. = ( 0xffe9 - code16_start ) ;
-*(.text.handle_hwpic1)
+*(.text.handle_legacy_disk)
+. = ( 0xffee - code16_start ) ;
+*(.text.handle_10)
 . = ( 0xfff0 - code16_start ) ;
 *(.fixedaddr.0xfff0)
 . = ( 0xfff5 - code16_start ) ;
