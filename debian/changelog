@@ -1,3 +1,9 @@
+seabios (1.6.3-1-1) stable; urgency=low
+
+  * Add memory and cpu hotplug patches
+
+ -- Vasilis Liaskovitis <vasilis.liaskovitis@profitbricks.com>  Wed, 20 Jun 2012 16:22:48 +0200
+
 seabios (1.6.3-1) unstable; urgency=low
 
   [ Michael Tokarev ]
