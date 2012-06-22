@@ -1,11 +1,11 @@
  src/acpi-dsdt.dsl |   73 ++++++++++++++++++++++++++++++++++++++++++++++++++--
  1 files changed, 70 insertions(+), 3 deletions(-)
 
-diff --git a/src/acpi-dsdt.dsl b/src/acpi-dsdt.dsl
-index 08412e2..6ea8710 100755
---- a/src/acpi-dsdt.dsl
-+++ b/src/acpi-dsdt.dsl
-@@ -762,7 +762,7 @@ DefinitionBlock (
+Index: seabios-ri/src/acpi-dsdt.dsl
+===================================================================
+--- seabios-ri.orig/src/acpi-dsdt.dsl	2012-06-22 12:05:19.000000000 +0200
++++ seabios-ri/src/acpi-dsdt.dsl	2012-06-22 12:07:05.646880397 +0200
+@@ -762,7 +762,7 @@
          Zero   /* reserved */
      })
  
@@ -14,7 +14,7 @@ index 08412e2..6ea8710 100755
      Scope(\_SB) {
          /* Objects filled in by run-time generated SSDT */
          External(NTFY, MethodObj)
-@@ -832,6 +832,72 @@ DefinitionBlock (
+@@ -838,6 +838,118 @@
              }
              Return(One)
          }
@@ -37,11 +37,32 @@ index 08412e2..6ea8710 100755
 +            MES, 256
 +        }
 + 
-+        /* Memory eject notify byte */
++        /* Memory eject byte */
 +        OperationRegion(MEMJ, SystemIO, 0xafa0, 1)
 +        Field (MEMJ, ByteAcc, NoLock, Preserve)
 +        {
 +            MPE, 8
++        }
++
++        /* Memory hot-remove notify failure byte */
++        OperationRegion(MPEF, SystemIO, 0xafa1, 1)
++        Field (MPEF, ByteAcc, NoLock, Preserve)
++        {
++            MEF, 8
++        }
++
++        /* Memory hot-add notify success byte */
++        OperationRegion(MPIS, SystemIO, 0xafa2, 1)
++        Field (MPIS, ByteAcc, NoLock, Preserve)
++        {
++            MIS, 8
++        }
++
++        /* Memory hot-add notify failure byte */
++        OperationRegion(MPIF, SystemIO, 0xafa3, 1)
++        Field (MPIF, ByteAcc, NoLock, Preserve)
++        {
++            MIF, 8
 +        }
 +
 +        Method(MESC, 0) {
@@ -84,10 +105,35 @@ index 08412e2..6ea8710 100755
 +            Store(Arg0, MPE)
 +            Sleep(200)
 +        }
++        Method (MOST, 3, Serialized) {
++            // _OST method - OS status indication
++            Switch (And(Arg0, 0xFF)) {
++                Case(0x3)
++                {
++                    Switch(And(Arg1, 0xFF)) {
++                        Case(0x1) {
++                            Store(Arg2, MEF)
++                        }
++                    }
++                }
++                Case(0x1)
++                {
++                    Switch(And(Arg1, 0xFF)) {
++                        Case(0x0) {
++                            Store(Arg2, MIS)
++                        }
++                        Case(0x1) {
++                            Store(Arg2, MIF)
++                        }
++                    }
++                }
++            }
++
++        }
      }
  
      Scope (\_GPE)
-@@ -890,8 +956,9 @@ DefinitionBlock (
+@@ -896,8 +1008,9 @@
              // CPU hotplug event
              Return(\_SB.PRSC())
          }

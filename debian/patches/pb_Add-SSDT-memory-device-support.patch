@@ -15,12 +15,11 @@ The design is taken from SSDT cpu generation.
  1 files changed, 66 insertions(+), 0 deletions(-)
  create mode 100644 src/ssdt-mem.dsl
 
-diff --git a/src/ssdt-mem.dsl b/src/ssdt-mem.dsl
-new file mode 100644
-index 0000000..4d935d7
---- /dev/null
-+++ b/src/ssdt-mem.dsl
-@@ -0,0 +1,66 @@
+Index: seabios-ri/src/ssdt-mem.dsl
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ seabios-ri/src/ssdt-mem.dsl	2012-06-21 18:32:49.323277371 +0200
+@@ -0,0 +1,70 @@
 +/* This file is the basis for the ssdt_mem[] variable in src/acpi.c.
 + * It is similar in design to the ssdt_proc variable.
 + * It defines the contents of the per-cpu Processor() object.  At
@@ -62,6 +61,7 @@ index 0000000..4d935d7
 +
 +        External(CMST, MethodObj)
 +        External(MPEJ, MethodObj)
++        External(MOST, MethodObj)
 +
 +        Name(_CRS, ResourceTemplate() {
 +            QwordMemory(
@@ -84,9 +84,9 @@ index 0000000..4d935d7
 +        Method (_EJ0, 1, NotSerialized) {
 +            MPEJ(ID, Arg0)
 +        }
++        Method (_OST, 3) {
++            MOST(Arg0, Arg1, ID)
++        }
 +    }
 +}    
 +
--- 
-1.7.9
-

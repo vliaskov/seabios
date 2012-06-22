@@ -1,10 +1,10 @@
  src/acpi.c |  177 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
  1 files changed, 175 insertions(+), 2 deletions(-)
 
-diff --git a/src/acpi.c b/src/acpi.c
-index 3d8b7c8..1b3c289 100755
---- a/src/acpi.c
-+++ b/src/acpi.c
+Index: seabios-ri/src/acpi.c
+===================================================================
+--- seabios-ri.orig/src/acpi.c	2012-06-21 19:21:11.000000000 +0200
++++ seabios-ri/src/acpi.c	2012-06-21 19:21:58.243840661 +0200
 @@ -12,6 +12,7 @@
  #include "pci_ids.h" // PCI_VENDOR_ID_INTEL
  #include "pci_regs.h" // PCI_INTERRUPT_LINE
@@ -13,12 +13,12 @@ index 3d8b7c8..1b3c289 100755
  
  /****************************************************/
  /* ACPI tables init */
-@@ -462,6 +463,144 @@ build_ssdt(void)
+@@ -462,6 +463,146 @@
      return ssdt;
  }
  
 +static unsigned char ssdt_mem[] = {
-+    0x5b,0x82,0x47,0x07,0x4d,0x50,0x41,0x41,
++    0x5b,0x82,0x48,0x08,0x4d,0x50,0x41,0x41,
 +    0x08,0x49,0x44,0x5f,0x5f,0x0a,0xaa,0x08,
 +    0x5f,0x48,0x49,0x44,0x0c,0x41,0xd0,0x0c,
 +    0x80,0x08,0x5f,0x50,0x58,0x4d,0x0a,0xaa,
@@ -33,7 +33,9 @@ index 3d8b7c8..1b3c289 100755
 +    0xa4,0x43,0x4d,0x53,0x54,0x49,0x44,0x5f,
 +    0x5f,0x14,0x0f,0x5f,0x45,0x4a,0x30,0x01,
 +    0x4d,0x50,0x45,0x4a,0x49,0x44,0x5f,0x5f,
-+    0x68
++    0x68,0x14,0x10,0x5f,0x4f,0x53,0x54,0x03,
++    0x4d,0x4f,0x53,0x54,0x68,0x69,0x49,0x44,
++    0x5f,0x5f
 +};
 +
 +#define MEM_BASE 0xaf80
@@ -158,7 +160,7 @@ index 3d8b7c8..1b3c289 100755
  #define HPET_SIGNATURE 0x54455048 // HPET
  static void*
  build_hpet(void)
-@@ -524,10 +663,12 @@ build_srat(void)
+@@ -524,10 +665,12 @@
  
      qemu_cfg_get_numa_data(numadata, MaxCountCPUs + nb_numa_nodes);
  
@@ -172,7 +174,7 @@ index 3d8b7c8..1b3c289 100755
  
      srat = malloc_high(srat_size);
      if (!srat) {
-@@ -563,6 +704,7 @@ build_srat(void)
+@@ -563,6 +706,7 @@
       */
      struct srat_memory_affinity *numamem = (void*)core;
      int slots = 0;
@@ -180,7 +182,7 @@ index 3d8b7c8..1b3c289 100755
      u64 mem_len, mem_base, next_base = 0;
  
      acpi_build_srat_memory(numamem, 0, 640*1024, 0, 1);
-@@ -589,10 +731,39 @@ build_srat(void)
+@@ -589,10 +733,39 @@
              next_base += (1ULL << 32) - RamSize;
          }
          acpi_build_srat_memory(numamem, mem_base, mem_len, i-1, 1);
@@ -221,7 +223,7 @@ index 3d8b7c8..1b3c289 100755
          acpi_build_srat_memory(numamem, 0, 0, 0, 0);
          numamem++;
      }
-@@ -600,6 +771,7 @@ build_srat(void)
+@@ -600,6 +773,7 @@
      build_header((void*)srat, SRAT_SIGNATURE, srat_size, 1);
  
      free(numadata);
@@ -229,7 +231,7 @@ index 3d8b7c8..1b3c289 100755
      return srat;
  }
  
-@@ -642,6 +814,7 @@ acpi_bios_init(void)
+@@ -642,6 +816,7 @@
      ACPI_INIT_TABLE(build_madt());
      ACPI_INIT_TABLE(build_hpet());
      ACPI_INIT_TABLE(build_srat());
