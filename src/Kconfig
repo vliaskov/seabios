@@ -13,7 +13,7 @@ menu "General Features"
     config XEN
         depends on !COREBOOT
         bool "Build for Xen HVM"
-        default n
+        default y
         help
             Configure to be used by xen hvmloader, for a HVM guest.
 
@@ -303,14 +303,13 @@ menu "BIOS interfaces"
 endmenu
 
 menu "BIOS Tables"
+    depends on !COREBOOT
     config PIRTABLE
-        depends on !COREBOOT
         bool "PIR table"
         default y
         help
             Support generation of a PIR table in 0xf000 segment.
     config MPTABLE
-        depends on !COREBOOT
         bool "MPTable"
         default y
         help
@@ -322,7 +321,6 @@ menu "BIOS Tables"
             Support generation of SM BIOS tables.  This is also
             sometimes called DMI.
     config ACPI
-        depends on !COREBOOT
         bool "ACPI"
         default y
         help
@@ -363,11 +361,4 @@ menu "Debugging"
             information by outputing strings in a special port present in the
             IO space.
 
-    config DEBUG_IO_PORT
-        depends on DEBUG_IO
-        hex "Debug IO port address"
-        default 0x0402
-        help
-            Bochs uses the 0x0402 address by default, whereas Xen
-            makes the 0xe9 IO address available for guests use.
 endmenu

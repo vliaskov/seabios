@@ -14,6 +14,7 @@
 #define INFO_PHYSICAL_ADDRESS 0x00001000
 
 u32 xen_cpuid_base = 0;
+unsigned long xen_hypercall_page = 0;
 
 struct xen_seabios_info {
     char signature[14]; /* XenHVMSeaBIOS\0 */
@@ -64,6 +65,10 @@ void xen_probe(void)
         dprintf(1, "Found hypervisor signature \"%s\" at %x\n",
                 signature, base);
         if (strcmp(signature, "XenVMMXenVMM") == 0) {
+            /* Set debug_io_port first, so the following messages work. */
+            DebugOutputPort = 0xe9;
+            dprintf(1, "SeaBIOS (version %s)\n\n", VERSION);
+            dprintf(1, "Found Xen hypervisor signature at %x\n", base);
             if ((eax - base) < 2)
                 panic("Insufficient Xen cpuid leaves. eax=%x at base %x\n",
                       eax, base);
@@ -71,6 +76,8 @@ void xen_probe(void)
             break;
         }
     }
+    if (!xen_cpuid_base)
+        dprintf(1, "No Xen hypervisor found.\n");
 }
 
 static int hypercall_xen_version( int cmd, void *arg)
@@ -107,17 +114,12 @@ void xen_init_hypercalls(void)
 void xen_copy_biostables(void)
 {
     struct xen_seabios_info *info = (void *)INFO_PHYSICAL_ADDRESS;
-    u32 *tables = (u32 *)info->tables;
+    void **tables = (void*)info->tables;
     int i;
 
     dprintf(1, "xen: copy BIOS tables...\n");
-    for (i=0; i<info->tables_nr; i++) {
-        void *table = (void *)tables[i];
-        copy_acpi_rsdp(table);
-        copy_mptable(table);
-        copy_pir(table);
-        copy_smbios(table);
-    }
+    for (i=0; i<info->tables_nr; i++)
+        copy_table(tables[i]);
 }
 
 void xen_setup(void)

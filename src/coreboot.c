@@ -198,12 +198,8 @@ scan_tables(u32 start, u32 size)
 {
     void *p = (void*)ALIGN(start, 16);
     void *end = (void*)start + size;
-    for (; p<end; p += 16) {
-        copy_pir(p);
-        copy_mptable(p);
-        copy_acpi_rsdp(p);
-        copy_smbios(p);
-    }
+    for (; p<end; p += 16)
+        copy_table(p);
 }
 
 void
@@ -222,10 +218,6 @@ coreboot_copy_biostable(void)
         if (m->type == CB_MEM_TABLE)
             scan_tables(m->start, m->size);
     }
-
-    // XXX - create a dummy smbios table for now.
-    if (!SMBiosAddr)
-        smbios_init();
 }
 
 

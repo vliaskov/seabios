@@ -231,6 +231,7 @@ int wait_preempt(void);
 void check_preempt(void);
 
 // output.c
+extern u16 DebugOutputPort;
 void debug_serial_setup(void);
 void panic(const char *fmt, ...)
     __attribute__ ((format (printf, 1, 2))) __noreturn;
@@ -365,10 +366,7 @@ void coreboot_setup(void);
 void coreboot_cbfs_setup(void);
 
 // biostable.c
-void copy_pir(void *pos);
-void copy_mptable(void *pos);
-void copy_acpi_rsdp(void *pos);
-void copy_smbios(void *pos);
+void copy_table(void *pos);
 
 // vgahooks.c
 void handle_155f(struct bregs *regs);

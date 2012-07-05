@@ -114,6 +114,9 @@ struct bios_data_area_s {
     u8 other_b0[9];
     u8 vbe_flag;
     u16 vbe_mode;
+    u8 other_bc[4];
+    // 40:C0
+    u8 other_c0[4*16];
 } PACKED;
 
 // BDA floppy_recalibration_status bitdefs
@@ -134,14 +137,12 @@ struct bios_data_area_s {
     GET_FARVAR(SEG_BDA, ((struct bios_data_area_s *)0)->var)
 #define SET_BDA(var, val) \
     SET_FARVAR(SEG_BDA, ((struct bios_data_area_s *)0)->var, (val))
-#define CLEARBITS_BDA(var, val) do {                                    \
-        typeof(((struct bios_data_area_s *)0)->var) __val = GET_BDA(var); \
-        SET_BDA(var, (__val & ~(val)));                                 \
-    } while (0)
-#define SETBITS_BDA(var, val) do {                                      \
-        typeof(((struct bios_data_area_s *)0)->var) __val = GET_BDA(var); \
-        SET_BDA(var, (__val | (val)));                                  \
-    } while (0)
+
+// Helper function to set the bits of the equipment_list_flags variable.
+static inline void set_equipment_flags(u16 clear, u16 set) {
+    u16 eqf = GET_BDA(equipment_list_flags);
+    SET_BDA(equipment_list_flags, (eqf & ~clear) | set);
+}
 
 
 /****************************************************************
@@ -250,13 +251,13 @@ static inline u16 get_global_seg(void) {
  * "Low" memory variables
  ****************************************************************/
 
-extern u8 _datalow_seg, _datalow_base[];
+extern u8 _datalow_seg, datalow_base[];
 #define SEG_LOW ((u32)&_datalow_seg)
 
 #if MODESEGMENT
 #define GET_LOW(var)            GET_FARVAR(SEG_LOW, (var))
 #define SET_LOW(var, val)       SET_FARVAR(SEG_LOW, (var), (val))
-#define LOWFLAT2LOW(var) ((typeof(var))((void*)(var) - (u32)_datalow_base))
+#define LOWFLAT2LOW(var) ((typeof(var))((void*)(var) - (u32)datalow_base))
 #else
 #define GET_LOW(var)            (var)
 #define SET_LOW(var, val)       do { (var) = (val); } while (0)
