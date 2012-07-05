@@ -762,6 +762,28 @@ DefinitionBlock (
             MPE, 8
         }
         
+
+        /* Memory hot-remove notify failure byte */
+        OperationRegion(MEEF, SystemIO, 0xafa1, 1)
+        Field (MEEF, ByteAcc, NoLock, Preserve)
+        {
+            MEF, 8
+        }
+
+        /* Memory hot-add notify success byte */
+        OperationRegion(MPIS, SystemIO, 0xafa2, 1)
+        Field (MPIS, ByteAcc, NoLock, Preserve)
+        {
+            MIS, 8
+        }
+
+        /* Memory hot-add notify failure byte */
+        OperationRegion(MPIF, SystemIO, 0xafa3, 1)
+        Field (MPIF, ByteAcc, NoLock, Preserve)
+        {
+            MIF, 8
+        }
+
         Method(MESC, 0) {
             // Local5 = active memdevice bitmap
             Store (MES, Local5)
@@ -801,6 +823,30 @@ DefinitionBlock (
             // _EJ0 method - eject callback
             Store(Arg0, MPE)
             Sleep(200)
+        }
+        Method (MOST, 3, Serialized) {
+            // _OST method - OS status indication
+            Switch (And(Arg0, 0xFF)) {
+                Case(0x3)
+                {
+                    Switch(And(Arg1, 0xFF)) {
+                        Case(0x1) {
+                            Store(Arg2, MEF)
+                        }
+                    }
+                }
+                Case(0x1)
+                {
+                    Switch(And(Arg1, 0xFF)) {
+                        Case(0x0) {
+                            Store(Arg2, MIS)
+                        }
+                        Case(0x1) {
+                            Store(Arg2, MIF)
+                        }
+                    }
+                }
+            }
         }
     }
 
