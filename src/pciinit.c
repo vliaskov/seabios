@@ -592,7 +592,7 @@ static void pci_region_map_entries(struct pci_bus *busses, struct pci_region *r)
 
 static void pci_bios_map_devices(struct pci_bus *busses)
 {
-    pcimem_start = RamSize;
+    pcimem_start = BUILD_PCIMEM_START;
 
     if (pci_bios_init_root_regions(busses)) {
         struct pci_region r64_mem, r64_pref;
