@@ -832,6 +832,8 @@ DefinitionBlock (
                     Switch(And(Arg1, 0xFF)) {
                         Case(0x1) {
                             Store(Arg2, MEF)
+                            // Revert MEON flag for this memory device to one
+                            Store(One, Index(MEON, Arg2))
                         }
                     }
                 }
@@ -843,6 +845,8 @@ DefinitionBlock (
                         }
                         Case(0x1) {
                             Store(Arg2, MIF)
+                            // Revert MEON flag for this memory device to zero
+                            Store(Zero, Index(MEON, Arg2))
                         }
                     }
                 }
