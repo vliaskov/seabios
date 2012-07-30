@@ -778,6 +778,13 @@ DefinitionBlock (
             MIF, 8
         }
 
+        /* Memory _PS3 byte */
+        OperationRegion(MPSB, SystemIO, 0xafa4, 1)
+        Field (MPSB, ByteAcc, NoLock, Preserve)
+        {
+            MPS, 8
+        }
+
         Method(MESC, 0) {
             // Local5 = active memdevice bitmap
             Store (MES, Local5)
@@ -818,6 +825,14 @@ DefinitionBlock (
             Store(Arg0, MPE)
             Sleep(200)
         }
+
+        Method (MPS3, 1, NotSerialized) {
+            // _PS3 method - power-off method
+            Store(Arg0, MPS)
+            Store(Zero, Index(MEON, Arg0))
+            Sleep(200)
+        }
+
         Method (MOST, 3, Serialized) {
             // _OST method - OS status indication
             Switch (And(Arg0, 0xFF)) {
