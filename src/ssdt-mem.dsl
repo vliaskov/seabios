@@ -39,6 +39,7 @@ DefinitionBlock ("ssdt-mem.aml", "SSDT", 0x02, "BXPC", "CSSDT", 0x1)
         External(CMST, MethodObj)
         External(MPEJ, MethodObj)
         External(MOST, MethodObj)
+        External(MPS3, MethodObj)
 
         Name(_CRS, ResourceTemplate() {
             QwordMemory(
@@ -63,6 +64,9 @@ DefinitionBlock ("ssdt-mem.aml", "SSDT", 0x02, "BXPC", "CSSDT", 0x1)
         }
         Method (_OST, 3) {
             MOST(Arg0, Arg1, ID)
+        }
+        Method (_PS3, 0) {
+            MPS3(ID)
         }
     }
 }    
