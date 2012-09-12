@@ -210,6 +210,12 @@ struct srat_memory_affinity
     u32    reserved3[2];
 } PACKED;
 
+struct system_locality_distance_information_table
+{
+    ACPI_TABLE_HEADER_DEF
+    u64    num_localities;
+} PACKED;
+
 #include "acpi-dsdt.hex"
 
 static void
@@ -734,10 +740,15 @@ acpi_build_srat_memory(struct srat_memory_affinity *numamem,
 }
 
 #define SRAT_SIGNATURE 0x54415253 // SRAT
+#define SLIT_SIGNATURE 0x54494C53 // SLIT
+#define SLIT_LOCAL_DISTANCE 10
+#define SLIT_REMOTE_DISTANCE 20 // fixed distance for now
+int nb_numa_nodes;
+
 static void *
 build_srat(void)
 {
-    int nb_numa_nodes = qemu_cfg_get_numa_nodes();
+    nb_numa_nodes = qemu_cfg_get_numa_nodes();
 
     u64 *numadata = malloc_tmphigh(sizeof(u64) * (MaxCountCPUs + nb_numa_nodes));
     if (!numadata) {
@@ -853,6 +864,32 @@ build_srat(void)
     return srat;
 }
 
+static void *
+build_slit(void)
+{
+    int i, j;
+    struct system_locality_distance_information_table *slit;
+    int slit_size = sizeof(*slit) + sizeof(u8) * nb_numa_nodes * nb_numa_nodes;
+
+    slit = malloc_high(slit_size);
+    if (!slit) {
+        warn_noalloc();
+        return NULL;
+    }
+
+    u8 *slit_entry = (u8*) (slit + 1);
+
+    for (i = 1; i < nb_numa_nodes + 1; ++i) 
+        for (j = 1; j < nb_numa_nodes + 1; j++) {
+            *slit_entry = (i == j) ? SLIT_LOCAL_DISTANCE : SLIT_REMOTE_DISTANCE;
+            slit_entry++;
+        }
+    slit->num_localities = nb_numa_nodes;
+    build_header((void*)slit, SLIT_SIGNATURE, slit_size, 1);
+
+    return slit;
+}
+
 static const struct pci_device_id acpi_find_tbl[] = {
     /* PIIX4 Power Management device. */
     PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_82371AB_3, NULL),
@@ -893,6 +930,7 @@ acpi_bios_init(void)
     ACPI_INIT_TABLE(build_madt());
     ACPI_INIT_TABLE(build_hpet());
     ACPI_INIT_TABLE(build_srat());
+    ACPI_INIT_TABLE(build_slit());
     ACPI_INIT_TABLE(build_memssdt());
     ACPI_INIT_TABLE(build_pcihp());
 
