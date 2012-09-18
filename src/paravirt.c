@@ -346,3 +346,9 @@ void qemu_cfg_romfile_setup(void)
         dprintf(3, "Found fw_cfg file: %s (size=%d)\n", file->name, file->size);
     }
 }
+
+void qemu_cfg_get_pci_offsets(u64 *pcimem_start, u64 *pcimem64_start)
+{
+    qemu_cfg_read_entry(pcimem_start, QEMU_CFG_PCI_WINDOW, sizeof(u64));
+    qemu_cfg_read((u8*)(pcimem64_start), sizeof(u64));
+}
