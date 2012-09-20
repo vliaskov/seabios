@@ -428,7 +428,10 @@ encodeLen(u8 *ssdt_ptr, int length, int bytes)
 #define MEM_OFFSET_END   63
 #define MEM_OFFSET_SIZE  79
 
-u64 nb_hp_memslots = 0;
+u64 nb_hp_memslots = 0, nb_numanodes;
+u64 *numa_data, *hp_memdata;
+u64 below_4g_hp_mem_size = 0;
+u64 above_4g_hp_mem_size = 0;
 struct srat_memory_affinity *mem;
 
 #define SSDT_SIGNATURE 0x54445353 // SSDT
@@ -763,17 +766,7 @@ acpi_build_srat_memory(struct srat_memory_affinity *numamem,
 static void *
 build_srat(void)
 {
-    int nb_numa_nodes = qemu_cfg_get_numa_nodes();
-
-    u64 *numadata = malloc_tmphigh(sizeof(u64) * (MaxCountCPUs + nb_numa_nodes));
-    if (!numadata) {
-        warn_noalloc();
-        return NULL;
-    }
-
-    qemu_cfg_get_numa_data(numadata, MaxCountCPUs + nb_numa_nodes);
-
-    qemu_cfg_get_numa_data(&nb_hp_memslots, 1);
+    int nb_numa_nodes = nb_numanodes;
     struct system_resource_affinity_table *srat;
     int srat_size = sizeof(*srat) +
         sizeof(struct srat_processor_affinity) * MaxCountCPUs +
@@ -782,7 +775,7 @@ build_srat(void)
     srat = malloc_high(srat_size);
     if (!srat) {
         warn_noalloc();
-        free(numadata);
+        free(numa_data);
         return NULL;
     }
 
@@ -791,6 +784,7 @@ build_srat(void)
     struct srat_processor_affinity *core = (void*)(srat + 1);
     int i;
     u64 curnode;
+    u64 *numadata = numa_data;
 
     for (i = 0; i < MaxCountCPUs; ++i) {
         core->type = SRAT_PROCESSOR;
@@ -847,15 +841,7 @@ build_srat(void)
     mem = (void*)numamem;
 
     if (nb_hp_memslots) {
-        u64 *hpmemdata = malloc_tmphigh(sizeof(u64) * (3 * nb_hp_memslots));
-        if (!hpmemdata) {
-            warn_noalloc();
-            free(hpmemdata);
-            free(numadata);
-            return NULL;
-        }
-
-        qemu_cfg_get_numa_data(hpmemdata, 3 * nb_hp_memslots);
+        u64 *hpmemdata = hp_memdata;
 
         for (i = 1; i < nb_hp_memslots + 1; ++i) {
             mem_base = *hpmemdata++;
@@ -865,7 +851,7 @@ build_srat(void)
             numamem++;
             slots++;
         }
-        free(hpmemdata);
+        free(hp_memdata);
     }
 
     for (; slots < nb_numa_nodes + nb_hp_memslots + 2; slots++) {
@@ -875,8 +861,56 @@ build_srat(void)
 
     build_header((void*)srat, SRAT_SIGNATURE, srat_size, 1);
 
-    free(numadata);
+    free(numa_data);
     return srat;
+}
+
+/* QEMU paravirt SRAT entries need to be read in before pci initilization */
+void read_srat_early(void)
+{
+    int i;
+
+    nb_numanodes = qemu_cfg_get_numa_nodes();
+    u64 *hpmemdata;
+    u64 mem_len, mem_base;
+
+    numa_data = malloc_tmphigh(sizeof(u64) * (MaxCountCPUs + nb_numanodes));
+    if (!numa_data) {
+        warn_noalloc();
+    }
+
+    qemu_cfg_get_numa_data(numa_data, MaxCountCPUs + nb_numanodes);
+    qemu_cfg_get_numa_data(&nb_hp_memslots, 1);
+
+    if (nb_hp_memslots) {
+        hp_memdata = malloc_tmphigh(sizeof(u64) * (3 * nb_hp_memslots));
+        if (!hp_memdata) {
+            warn_noalloc();
+            free(hp_memdata);
+            free(numa_data);
+        }
+
+        qemu_cfg_get_numa_data(hp_memdata, 3 * nb_hp_memslots);
+        hpmemdata = hp_memdata;
+
+        for (i = 1; i < nb_hp_memslots + 1; ++i) {
+            mem_base = *hpmemdata++;
+            mem_len = *hpmemdata++;
+            hpmemdata++;
+            if (mem_base >= 0x100000000LL) {
+                above_4g_hp_mem_size += mem_len;
+            }
+            /* if dimm fits before pci hole, append it normally */
+            else if (mem_base + mem_len <= BUILD_PCIMEM_START) {
+                below_4g_hp_mem_size += mem_len;
+            }
+            /* otherwise place it above 4GB */
+            else {
+                above_4g_hp_mem_size += mem_len;
+            }
+        }
+
+    }
 }
 
 static const struct pci_device_id acpi_find_tbl[] = {

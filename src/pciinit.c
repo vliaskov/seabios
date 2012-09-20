@@ -12,6 +12,7 @@
 #include "ioport.h" // PORT_ATA1_CMD_BASE
 #include "config.h" // CONFIG_*
 #include "xen.h" // usingXen
+#include "acpi.h"
 
 #define PCI_DEVICE_MEM_MIN     0x1000
 #define PCI_BRIDGE_IO_MIN      0x1000
@@ -597,7 +598,7 @@ static void pci_region_map_entries(struct pci_bus *busses, struct pci_region *r)
 
 static void pci_bios_map_devices(struct pci_bus *busses)
 {
-    pcimem_start = RamSize;
+    pcimem_start = RamSize + below_4g_hp_mem_size;
 
     if (pci_bios_init_root_regions(busses)) {
         struct pci_region r64_mem, r64_pref;
@@ -616,7 +617,8 @@ static void pci_bios_map_devices(struct pci_bus *busses)
         u64 align_mem = pci_region_align(&r64_mem);
         u64 align_pref = pci_region_align(&r64_pref);
 
-        r64_mem.base = ALIGN(0x100000000LL + RamSizeOver4G, align_mem);
+        r64_mem.base = ALIGN(0x100000000LL + RamSizeOver4G +
+                above_4g_hp_mem_size, align_mem);
         r64_pref.base = ALIGN(r64_mem.base + sum_mem, align_pref);
         pcimem64_start = r64_mem.base;
         pcimem64_end = r64_pref.base + sum_pref;

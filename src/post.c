@@ -234,6 +234,9 @@ maininit(void)
     // Initialize mtrr
     mtrr_setup();
 
+    smp_get_ncpus();
+    read_srat_early();
+
     // Initialize pci
     pci_setup();
     smm_init();

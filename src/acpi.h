@@ -5,6 +5,9 @@
 
 void acpi_bios_init(void);
 u32 find_resume_vector(void);
+void read_srat_early(void);
+extern u64 below_4g_hp_mem_size;
+extern u64 above_4g_hp_mem_size;
 
 #define RSDP_SIGNATURE 0x2052545020445352LL // "RSD PTR "
 

@@ -138,7 +138,11 @@ smp_probe(void)
 
     // Restore memory.
     *(u64*)BUILD_AP_BOOT_ADDR = old;
+}
 
+void
+smp_get_ncpus(void)
+{
     MaxCountCPUs = qemu_cfg_get_max_cpus();
     if (!MaxCountCPUs || MaxCountCPUs < CountCPUs)
         MaxCountCPUs = CountCPUs;
