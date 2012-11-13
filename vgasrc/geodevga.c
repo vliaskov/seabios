@@ -86,54 +86,74 @@ static void geode_mem_mask(u32 addr, u32 off, u32 or)
     );
 }
 
-/****************************************************************
- * Helper functions
- ****************************************************************/
+#define VP_FP_START     0x400
 
-struct geode {
-    u32 fb;
-    u32 dc;
-    u32 vp;
-};
-struct geode geode VAR16;
+static u32 GeodeFB VAR16;
+static u32 GeodeDC VAR16;
+static u32 GeodeVP VAR16;
 
 static u32 geode_dc_read(int reg)
 {
-    u32 val = geode_mem_read(geode.dc + reg);
-    dprintf(4, "%s(0x%08x) = 0x%08x\n", __func__, geode.dc + reg, val);
+    u32 val = geode_mem_read(GET_GLOBAL(GeodeDC) + reg);
+    dprintf(4, "%s(0x%08x) = 0x%08x\n"
+            , __func__, GET_GLOBAL(GeodeDC) + reg, val);
     return val;
 }
 
 static void geode_dc_write(int reg, u32 val)
 {
-    dprintf(4, "%s(0x%08x, 0x%08x)\n", __func__, geode.dc + reg, val);
-    geode_mem_mask(geode.dc + reg, ~0, val);
+    dprintf(4, "%s(0x%08x, 0x%08x)\n"
+            , __func__, GET_GLOBAL(GeodeDC) + reg, val);
+    geode_mem_mask(GET_GLOBAL(GeodeDC) + reg, ~0, val);
 }
 
 static void geode_dc_mask(int reg, u32 off, u32 on)
 {
-    dprintf(4, "%s(0x%08x, 0x%08x, 0x%08x)\n", __func__, geode.dc + reg, off, on);
-    geode_mem_mask(geode.dc + reg, off, on);
+    dprintf(4, "%s(0x%08x, 0x%08x, 0x%08x)\n"
+            , __func__, GET_GLOBAL(GeodeDC) + reg, off, on);
+    geode_mem_mask(GET_GLOBAL(GeodeDC) + reg, off, on);
 }
 
 static u32 geode_vp_read(int reg)
 {
-    u32 val = geode_mem_read(geode.vp + reg);
-    dprintf(4, "%s(0x%08x) = 0x%08x\n", __func__, geode.vp + reg, val);
+    u32 val = geode_mem_read(GET_GLOBAL(GeodeVP) + reg);
+    dprintf(4, "%s(0x%08x) = 0x%08x\n"
+            , __func__, GET_GLOBAL(GeodeVP) + reg, val);
     return val;
 }
 
 static void geode_vp_write(int reg, u32 val)
 {
-    dprintf(4, "%s(0x%08x, 0x%08x)\n", __func__, geode.vp + reg, val);
-    geode_mem_mask(geode.vp + reg, ~0, val);
+    dprintf(4, "%s(0x%08x, 0x%08x)\n"
+            , __func__, GET_GLOBAL(GeodeVP) + reg, val);
+    geode_mem_mask(GET_GLOBAL(GeodeVP) + reg, ~0, val);
 }
 
 static void geode_vp_mask(int reg, u32 off, u32 on)
 {
-    dprintf(4, "%s(0x%08x, 0x%08x, 0x%08x)\n", __func__, geode.vp + reg, off, on);
-    geode_mem_mask(geode.vp + reg, off, on);
+    dprintf(4, "%s(0x%08x, 0x%08x, 0x%08x)\n"
+            , __func__, GET_GLOBAL(GeodeVP) + reg, off, on);
+    geode_mem_mask(GET_GLOBAL(GeodeVP) + reg, off, on);
 }
+
+static u32 geode_fp_read(int reg)
+{
+    u32 val = geode_mem_read(GET_GLOBAL(GeodeVP) + VP_FP_START + reg);
+    dprintf(4, "%s(0x%08x) = 0x%08x\n"
+            , __func__, GET_GLOBAL(GeodeVP) + reg, val);
+    return val;
+}
+
+static void geode_fp_write(int reg, u32 val)
+{
+    dprintf(4, "%s(0x%08x, 0x%08x)\n"
+            , __func__, GET_GLOBAL(GeodeVP) + VP_FP_START + reg, val);
+    geode_mem_mask(GET_GLOBAL(GeodeVP) + reg, ~0, val);
+}
+
+/****************************************************************
+ * Helper functions
+ ****************************************************************/
 
 static int legacyio_check(void)
 {
@@ -199,21 +219,20 @@ static void dc_setup(void)
     geode_dc_write(DC_CURS_ST_OFFSET, 0x0);
 
     /* read fb-bar from pci, then point dc to the fb base */
-    u32 dc_fb = geode_dc_read(DC_GLIU0_MEM_OFFSET);
-    if (geode.fb != dc_fb) {
-        geode_dc_write(DC_GLIU0_MEM_OFFSET, geode.fb);
-    }
+    u32 fb = GET_GLOBAL(GeodeFB);
+    if (geode_dc_read(DC_GLIU0_MEM_OFFSET) != fb)
+        geode_dc_write(DC_GLIU0_MEM_OFFSET, fb);
 
-    geode_dc_mask(DC_DISPLAY_CFG, ~DC_CFG_MSK, DC_GDEN|DC_TRUP);
-    geode_dc_write(DC_GENERAL_CFG, DC_VGAE);
+    geode_dc_mask(DC_DISPLAY_CFG, ~DC_CFG_MSK, DC_DISPLAY_CFG_GDEN|DC_DISPLAY_CFG_TRUP);
+    geode_dc_write(DC_GENERAL_CFG, DC_DISPLAY_CFG_VGAE);
 
     geode_dc_write(DC_UNLOCK, DC_LOCK_LOCK);
 
     u32 fb_size = framebuffer_size(); // in byte
-    dprintf(1, "%d KB of video memory at 0x%08x\n", fb_size / 1024, geode.fb);
+    dprintf(1, "%d KB of video memory at 0x%08x\n", fb_size / 1024, fb);
 
     /* update VBE variables */
-    SET_VGA(VBE_framebuffer, geode.fb);
+    SET_VGA(VBE_framebuffer, fb);
     SET_VGA(VBE_total_memory, fb_size / 1024 / 64); // number of 64K blocks
 }
 
@@ -225,12 +244,37 @@ static void dc_setup(void)
 */
 static void vp_setup(void)
 {
+    u32 msr_addr;
+    u64 msr;
+
     dprintf(2,"VP_SETUP\n");
+
     /* set output to crt and RGB/YUV */
     if (CONFIG_VGA_GEODEGX2)
-        geode_msr_mask(VP_MSR_CONFIG_GX2, 0xf8, 0);
+        msr_addr = VP_MSR_CONFIG_GX2;
     else
-        geode_msr_mask(VP_MSR_CONFIG_LX, 0xf8, 0);
+        msr_addr = VP_MSR_CONFIG_LX;
+
+    /* set output mode (RGB/YUV) */
+    msr = geode_msr_read(msr_addr);
+    msr &= ~VP_MSR_CONFIG_FMT;         // mask out FMT (bits 5:3)
+
+    if (CONFIG_VGA_OUTPUT_PANEL || CONFIG_VGA_OUTPUT_CRT_PANEL) {
+        msr |= VP_MSR_CONFIG_FMT_FP;   // flat panel
+
+        if (CONFIG_VGA_OUTPUT_CRT_PANEL) {
+            msr |= VP_MSR_CONFIG_FPC;  // simultaneous Flat Panel and CRT
+            dprintf(1, "output: simultaneous Flat Panel and CRT\n");
+        } else {
+            msr &= ~VP_MSR_CONFIG_FPC; // no simultaneous Flat Panel and CRT
+            dprintf(1, "ouput: flat panel\n");
+        }
+    } else {
+        msr |= VP_MSR_CONFIG_FMT_CRT;  // CRT only
+       dprintf(1, "output: CRT\n");
+    }
+    geode_msr_mask(msr_addr, ~msr, msr);
+
 
     /* Set mmio registers
     * there may be some timing issues here, the reads seem
@@ -239,15 +283,34 @@ static void vp_setup(void)
 
     u32 reg = geode_vp_read(VP_MISC);
     dprintf(1,"VP_SETUP VP_MISC=0x%08x\n",reg);
-    geode_vp_write(VP_MISC, VP_BYP_BOTH);
+    geode_vp_write(VP_MISC, VP_DCFG_BYP_BOTH);
     reg = geode_vp_read(VP_MISC);
     dprintf(1,"VP_SETUP VP_MISC=0x%08x\n",reg);
 
     reg = geode_vp_read(VP_DCFG);
     dprintf(1,"VP_SETUP VP_DCFG=0x%08x\n",reg);
-    geode_vp_mask(VP_DCFG, 0, VP_CRT_EN|VP_HSYNC_EN|VP_VSYNC_EN|VP_DAC_BL_EN|VP_CRT_SKEW);
+    geode_vp_mask(VP_DCFG, 0, VP_DCFG_CRT_EN|VP_DCFG_HSYNC_EN|VP_DCFG_VSYNC_EN|VP_DCFG_DAC_BL_EN|VP_DCFG_CRT_SKEW);
     reg = geode_vp_read(VP_DCFG);
     dprintf(1,"VP_SETUP VP_DCFG=0x%08x\n",reg);
+
+    /* setup flat panel */
+    if (CONFIG_VGA_OUTPUT_PANEL || CONFIG_VGA_OUTPUT_CRT_PANEL) {
+        dprintf(1, "Setting up flat panel\n");
+        /* write timing register */
+        geode_fp_write(FP_PT1, 0x0);
+        geode_fp_write(FP_PT2, FP_PT2_SCRC);
+
+        /* set pad select for TFT/LVDS */
+        msr  = VP_MSR_PADSEL_TFT_SEL_HIGH;
+        msr  = msr << 32;
+        msr |= VP_MSR_PADSEL_TFT_SEL_LOW;
+        geode_msr_mask(VP_MSR_PADSEL, ~msr, msr);
+
+        /* turn the panel on (if it isn't already) */
+        reg = geode_fp_read(FP_PM);
+        reg |= FP_PM_P;
+        geode_fp_write(FP_PM, reg);
+    }
 }
 
 static u8 geode_crtc_01[] VAR16 = {
@@ -335,16 +398,16 @@ int geodevga_init(void)
     if (GET_GLOBAL(VgaBDF) < 0)
         // Device should be at 00:01.1
         SET_VGA(VgaBDF, pci_to_bdf(0, 1, 1));
-    
+
     // setup geode struct which is used for register access
-    geode.fb = pci_config_readl(GET_GLOBAL(VgaBDF), PCI_BASE_ADDRESS_0);
-    geode.dc = pci_config_readl(GET_GLOBAL(VgaBDF), PCI_BASE_ADDRESS_2);
-    geode.vp = pci_config_readl(GET_GLOBAL(VgaBDF), PCI_BASE_ADDRESS_3);
-    
-    dprintf(1, "fb addr: 0x%08x\n", geode.fb);
-    dprintf(1, "dc addr: 0x%08x\n", geode.dc);
-    dprintf(1, "vp addr: 0x%08x\n", geode.vp);
-    
+    SET_VGA(GeodeFB, pci_config_readl(GET_GLOBAL(VgaBDF), PCI_BASE_ADDRESS_0));
+    SET_VGA(GeodeDC, pci_config_readl(GET_GLOBAL(VgaBDF), PCI_BASE_ADDRESS_2));
+    SET_VGA(GeodeVP, pci_config_readl(GET_GLOBAL(VgaBDF), PCI_BASE_ADDRESS_3));
+
+    dprintf(1, "fb addr: 0x%08x\n", GET_GLOBAL(GeodeFB));
+    dprintf(1, "dc addr: 0x%08x\n", GET_GLOBAL(GeodeDC));
+    dprintf(1, "vp addr: 0x%08x\n", GET_GLOBAL(GeodeVP));
+
     vp_setup();
     dc_setup();
 
