@@ -13,6 +13,7 @@
 #include "pci_regs.h" // PCI_INTERRUPT_LINE
 #include "ioport.h" // inl
 #include "paravirt.h" // qemu_cfg_irq0_override
+#include "dev-q35.h" // qemu_cfg_irq0_override
 
 /****************************************************/
 /* ACPI tables init */
@@ -233,20 +234,65 @@ build_header(struct acpi_table_header *h, u32 sig, int len, u8 rev)
 #define PIIX4_GPE0_BLK          0xafe0
 #define PIIX4_GPE0_BLK_LEN      4
 
+#define PIIX4_PM_INTRRUPT       9       // irq 9
+
 static void piix4_fadt_init(struct pci_device *pci, void *arg)
 {
     struct fadt_descriptor_rev1 *fadt = arg;
+
+    fadt->model = 1;
+    fadt->reserved1 = 0;
+    fadt->sci_int = cpu_to_le16(PIIX4_PM_INTRRUPT);
+    fadt->smi_cmd = cpu_to_le32(PORT_SMI_CMD);
     fadt->acpi_enable = PIIX4_ACPI_ENABLE;
     fadt->acpi_disable = PIIX4_ACPI_DISABLE;
+    fadt->pm1a_evt_blk = cpu_to_le32(PORT_ACPI_PM_BASE);
+    fadt->pm1a_cnt_blk = cpu_to_le32(PORT_ACPI_PM_BASE + 0x04);
+    fadt->pm_tmr_blk = cpu_to_le32(PORT_ACPI_PM_BASE + 0x08);
     fadt->gpe0_blk = cpu_to_le32(PIIX4_GPE0_BLK);
+    fadt->pm1_evt_len = 4;
+    fadt->pm1_cnt_len = 2;
+    fadt->pm_tmr_len = 4;
     fadt->gpe0_blk_len = PIIX4_GPE0_BLK_LEN;
+    fadt->plvl2_lat = cpu_to_le16(0xfff); // C2 state not supported
+    fadt->plvl3_lat = cpu_to_le16(0xfff); // C3 state not supported
+    /* WBINVD + PROC_C1 + SLP_BUTTON + RTC_S4 + USE_PLATFORM_CLOCK */
+    fadt->flags = cpu_to_le32((1 << 0) | (1 << 2) | (1 << 5) | (1 << 7) |
+                              (1 << 15));
+}
+
+/* PCI_VENDOR_ID_INTEL && PCI_DEVICE_ID_INTEL_ICH9_LPC */
+void ich9_lpc_fadt_init(struct pci_device *dev, void *arg)
+{
+    struct fadt_descriptor_rev1 *fadt = arg;
+
+    fadt->model = 1;
+    fadt->reserved1 = 0;
+    fadt->sci_int = cpu_to_le16(9);
+    fadt->smi_cmd = cpu_to_le32(PORT_SMI_CMD);
+    fadt->acpi_enable = ICH9_ACPI_ENABLE;
+    fadt->acpi_disable = ICH9_ACPI_DISABLE;
+    fadt->pm1a_evt_blk = cpu_to_le32(PORT_ACPI_PM_BASE);
+    fadt->pm1a_cnt_blk = cpu_to_le32(PORT_ACPI_PM_BASE + 0x04);
+    fadt->pm_tmr_blk = cpu_to_le32(PORT_ACPI_PM_BASE + 0x08);
+    fadt->gpe0_blk = cpu_to_le32(PORT_ACPI_PM_BASE + ICH9_PMIO_GPE0_STS);
+    fadt->pm1_evt_len = 4;
+    fadt->pm1_cnt_len = 2;
+    fadt->pm_tmr_len = 4;
+    fadt->gpe0_blk_len = ICH9_PMIO_GPE0_BLK_LEN;
+    fadt->plvl2_lat = cpu_to_le16(0xfff); // C2 state not supported
+    fadt->plvl3_lat = cpu_to_le16(0xfff); // C3 state not supported
+    /* WBINVD + PROC_C1 + SLP_BUTTON + FIX_RTC + RTC_S4 */
+    fadt->flags = cpu_to_le32((1 << 0) | (1 << 2) | (1 << 5) | (1 << 6) |
+                              (1 << 7));
 }
 
 static const struct pci_device_id fadt_init_tbl[] = {
     /* PIIX4 Power Management device (for ACPI) */
     PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_82371AB_3,
                piix4_fadt_init),
-
+    PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_ICH9_LPC,
+               ich9_lpc_fadt_init),
     PCI_DEVICE_END
 };
 
@@ -281,23 +327,7 @@ build_fadt(struct pci_device *pci)
     fadt->firmware_ctrl = cpu_to_le32((u32)facs);
     fadt->dsdt = 0;  /* dsdt will be filled later in acpi_bios_init()
                         by fill_dsdt() */
-    fadt->model = 1;
-    fadt->reserved1 = 0;
-    int pm_sci_int = pci_config_readb(pci->bdf, PCI_INTERRUPT_LINE);
-    fadt->sci_int = cpu_to_le16(pm_sci_int);
-    fadt->smi_cmd = cpu_to_le32(PORT_SMI_CMD);
-    fadt->pm1a_evt_blk = cpu_to_le32(PORT_ACPI_PM_BASE);
-    fadt->pm1a_cnt_blk = cpu_to_le32(PORT_ACPI_PM_BASE + 0x04);
-    fadt->pm_tmr_blk = cpu_to_le32(PORT_ACPI_PM_BASE + 0x08);
-    fadt->pm1_evt_len = 4;
-    fadt->pm1_cnt_len = 2;
-    fadt->pm_tmr_len = 4;
-    fadt->plvl2_lat = cpu_to_le16(0xfff); // C2 state not supported
-    fadt->plvl3_lat = cpu_to_le16(0xfff); // C3 state not supported
     pci_init_device(fadt_init_tbl, pci, fadt);
-    /* WBINVD + PROC_C1 + SLP_BUTTON + RTC_S4 + USE_PLATFORM_CLOCK */
-    fadt->flags = cpu_to_le32((1 << 0) | (1 << 2) | (1 << 5) | (1 << 7) |
-                              (1 << 15));
 
     build_header((void*)fadt, FACP_SIGNATURE, sizeof(*fadt), 1);
 
@@ -734,10 +764,31 @@ build_srat(void)
     return srat;
 }
 
+static void *
+build_mcfg_q35(void)
+{
+    struct acpi_table_mcfg *mcfg;
+
+    int len = sizeof(*mcfg) + 1 * sizeof(mcfg->allocation[0]);
+    mcfg = malloc_high(len);
+    if (!mcfg) {
+        warn_noalloc();
+        return NULL;
+    }
+    memset(mcfg, 0, len);
+    mcfg->allocation[0].address = Q35_HOST_BRIDGE_PCIEXBAR_ADDR;
+    mcfg->allocation[0].pci_segment = Q35_HOST_PCIE_PCI_SEGMENT;
+    mcfg->allocation[0].start_bus_number = Q35_HOST_PCIE_START_BUS_NUMBER;
+    mcfg->allocation[0].end_bus_number = Q35_HOST_PCIE_END_BUS_NUMBER;
+
+    build_header((void *)mcfg, MCFG_SIGNATURE, len, 1);
+    return mcfg;
+}
+
 static const struct pci_device_id acpi_find_tbl[] = {
     /* PIIX4 Power Management device. */
     PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_82371AB_3, NULL),
-
+    PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_ICH9_LPC, NULL),
     PCI_DEVICE_END,
 };
 
@@ -774,6 +825,8 @@ acpi_bios_init(void)
     ACPI_INIT_TABLE(build_madt());
     ACPI_INIT_TABLE(build_hpet());
     ACPI_INIT_TABLE(build_srat());
+    if (pci->device == PCI_DEVICE_ID_INTEL_ICH9_LPC)
+        ACPI_INIT_TABLE(build_mcfg_q35());
 
     u16 i, external_tables = qemu_cfg_acpi_additional_tables();
 
