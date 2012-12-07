@@ -21,6 +21,13 @@ Scope(\_SB) {
             MES, 256
         }
  
+        /* Memory eject byte */
+        OperationRegion(MEMJ, SystemIO, 0xafa0, 1)
+        Field (MEMJ, ByteAcc, NoLock, Preserve)
+        {
+            MPE, 8
+        }
+        
         Method(MESC, 0) {
             // Local5 = active memdevice bitmap
             Store (MES, Local5)
@@ -47,11 +54,19 @@ Scope(\_SB) {
                     // Do MEM notify
                     If (LEqual(Local3, 1)) {
                         MTFY(Local0, 1)
+                    } Else {
+                        MTFY(Local0, 3)
                     }
                 }
                 Increment(Local0)
             }
             Return(One)
+        }
+
+        Method (MPEJ, 2, NotSerialized) {
+            // _EJ0 method - eject callback
+            Store(Arg0, MPE)
+            Sleep(200)
         }
 
 }
