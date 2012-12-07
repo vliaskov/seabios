@@ -57,6 +57,9 @@ DefinitionBlock ("ssdt-mem.aml", "SSDT", 0x02, "BXPC", "CSSDT", 0x1)
         Method (_STA, 0) {
             Return(CMST(ID))        
         }    
+        Method (_EJ0, 1, NotSerialized) {
+            MPEJ(ID, Arg0)
+        }
     }
 }    
 
