@@ -294,6 +294,7 @@ DefinitionBlock (
     }
 
 #include "acpi-dsdt-cpu-hotplug.dsl"
+#include "acpi-dsdt-mem-hotplug.dsl"
 
 
 /****************************************************************
@@ -313,7 +314,9 @@ DefinitionBlock (
             // CPU hotplug event
             \_SB.PRSC()
         }
-        Method(_L03) {
+        Method(_E03) {
+            // Memory hotplug event
+            \_SB.MESC()
         }
         Method(_L04) {
         }
