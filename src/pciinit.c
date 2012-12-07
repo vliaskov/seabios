@@ -689,6 +689,7 @@ static void pci_region_map_entries(struct pci_bus *busses, struct pci_region *r)
 
 static void pci_bios_map_devices(struct pci_bus *busses)
 {
+    qemu_cfg_get_pci_offsets(&pcimem_start, &pcimem64_start);
     if (pci_bios_init_root_regions(busses)) {
         struct pci_region r64_mem, r64_pref;
         r64_mem.list = NULL;
@@ -706,7 +707,7 @@ static void pci_bios_map_devices(struct pci_bus *busses)
         u64 align_mem = pci_region_align(&r64_mem);
         u64 align_pref = pci_region_align(&r64_pref);
 
-        r64_mem.base = ALIGN(0x100000000LL + RamSizeOver4G, align_mem);
+        r64_mem.base = ALIGN(pcimem64_start, align_mem);
         r64_pref.base = ALIGN(r64_mem.base + sum_mem, align_pref);
         pcimem64_start = r64_mem.base;
         pcimem64_end = r64_pref.base + sum_pref;
