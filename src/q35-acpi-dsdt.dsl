@@ -403,7 +403,7 @@ DefinitionBlock (
     }
 
 #include "acpi-dsdt-cpu-hotplug.dsl"
-
+#include "acpi-dsdt-mem-hotplug.dsl"
 
 /****************************************************************
  * General purpose events
@@ -418,7 +418,9 @@ DefinitionBlock (
             // CPU hotplug event
             \_SB.PRSC()
         }
-        Method(_L02) {
+        Method(_E02) {
+            // Memory hotplug event
+            \_SB.MESC()
         }
         Method(_L03) {
         }
