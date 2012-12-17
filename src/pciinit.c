@@ -734,6 +734,7 @@ static void pci_bios_map_devices(struct pci_bus *busses)
 void
 pci_setup(void)
 {
+    u64 pv_pcimem_start, pv_pcimem64_start;
     if (CONFIG_COREBOOT || usingXen()) {
         // PCI setup already done by coreboot or Xen - just do probe.
         pci_probe_devices();
@@ -768,6 +769,14 @@ pci_setup(void)
     pci_bios_map_devices(busses);
 
     pci_bios_init_devices();
+
+    /* if qemu gives us other pci window values, it means there are hotplug-able
+     * dimms. Adjust accordingly */
+    qemu_cfg_get_pci_offsets(&pv_pcimem_start, &pv_pcimem64_start);
+    if (pv_pcimem_start > pcimem_start)
+        pcimem_start = pv_pcimem_start;
+    if (pv_pcimem64_start > pcimem64_start)
+        pcimem64_start = pv_pcimem64_start;
 
     free(busses);
 }
