@@ -77,20 +77,6 @@ DefinitionBlock (
 
 
 /****************************************************************
- * PIIX3 ISA bridge
- ****************************************************************/
-
-    Scope(\_SB.PCI0) {
-        Device(ISA) {
-            Name(_ADR, 0x00010000)
-
-            /* PIIX PCI to ISA irq remapping */
-            OperationRegion(P40C, PCI_Config, 0x60, 0x04)
-        }
-    }
-
-
-/****************************************************************
  * PIIX4 PM
  ****************************************************************/
 
@@ -103,23 +89,29 @@ DefinitionBlock (
 
 
 /****************************************************************
- * SuperIO devices (kbd, mouse, etc.)
+ * PIIX3 ISA bridge
  ****************************************************************/
 
-    Scope(\_SB.PCI0.ISA) {
+    Scope(\_SB.PCI0) {
+        Device(ISA) {
+            Name(_ADR, 0x00010000)
 
-        /* enable bits */
-        Field(\_SB.PCI0.PX13.P13C, AnyAcc, NoLock, Preserve) {
-            Offset(0x5f),
-            , 7,
-            LPEN, 1,         // LPT
-            Offset(0x67),
-            , 3,
-            CAEN, 1,         // COM1
-            , 3,
-            CBEN, 1,         // COM2
+            /* PIIX PCI to ISA irq remapping */
+            OperationRegion(P40C, PCI_Config, 0x60, 0x04)
+
+            /* enable bits */
+            Field(\_SB.PCI0.PX13.P13C, AnyAcc, NoLock, Preserve) {
+                Offset(0x5f),
+                , 7,
+                LPEN, 1,         // LPT
+                Offset(0x67),
+                , 3,
+                CAEN, 1,         // COM1
+                , 3,
+                CBEN, 1,         // COM2
+            }
+            Name(FDEN, 1)
         }
-        Name(FDEN, 1)
     }
 
 #include "acpi-dsdt-isa.dsl"
@@ -195,10 +187,7 @@ DefinitionBlock (
 
                 prt_slot0(0x0000),
                 /* Device 1 is power mgmt device, and can only use irq 9 */
-                Package() { 0x1ffff, 0,    0, 9 },
-                Package() { 0x1ffff, 1, LNKB, 0 },
-                Package() { 0x1ffff, 2, LNKC, 0 },
-                Package() { 0x1ffff, 3, LNKD, 0 },
+                prt_slot(0x0001, LNKS, LNKB, LNKC, LNKD),
                 prt_slot2(0x0002),
                 prt_slot3(0x0003),
                 prt_slot0(0x0004),
@@ -286,6 +275,22 @@ DefinitionBlock (
         define_link(LNKB, 1, PRQ1)
         define_link(LNKC, 2, PRQ2)
         define_link(LNKD, 3, PRQ3)
+
+        Device(LNKS) {
+            Name(_HID, EISAID("PNP0C0F"))
+            Name(_UID, 4)
+            Name(_PRS, ResourceTemplate() {
+                Interrupt(, Level, ActiveHigh, Shared) { 9 }
+            })
+
+            // The SCI cannot be disabled and is always attached to GSI 9,
+            // so these are no-ops.  We only need this link to override the
+            // polarity to active high and match the content of the MADT.
+            Method(_STA, 0, NotSerialized) { Return (0x0b) }
+            Method(_DIS, 0, NotSerialized) { }
+            Method(_CRS, 0, NotSerialized) { Return (_PRS) }
+            Method(_SRS, 1, NotSerialized) { }
+        }
     }
 
 #include "acpi-dsdt-cpu-hotplug.dsl"
