@@ -230,6 +230,28 @@ def aml_package_start(offset):
     offset += 1
     return offset + aml_pkglen_bytes(offset) + 1
 
+def aml_device_start(offset):
+    #0x5B 0x82 DeviceOp PkgLength NameString ProcID
+    if ((aml[offset] != 0x5B) or (aml[offset + 1] != 0x82)):
+        die( "Name offset 0x%x: expected 0x5B 0x83 actual 0x%x 0x%x" %
+             (offset, aml[offset], aml[offset + 1]));
+    return offset
+
+def aml_device_string(offset):
+    #0x5B 0x82 DeviceOp PkgLength NameString ProcID
+    start = aml_device_start(offset)
+    offset += 2
+    pkglenbytes = aml_pkglen_bytes(offset)
+    offset += pkglenbytes
+    return offset
+
+def aml_device_end(offset):
+    start = aml_device_start(offset)
+    offset += 2
+    pkglenbytes = aml_pkglen_bytes(offset)
+    pkglen = aml_pkglen(offset)
+    return offset + pkglen
+
 lineno = 0
 for line in fileinput.input():
     # Strip trailing newline
@@ -322,6 +344,12 @@ for i in range(len(asl)):
         offset = aml_processor_end(offset)
     elif (directive == "ACPI_EXTRACT_PKG_START"):
         offset = aml_package_start(offset)
+    elif (directive == "ACPI_EXTRACT_DEVICE_START"):
+        offset = aml_device_start(offset)
+    elif (directive == "ACPI_EXTRACT_DEVICE_STRING"):
+        offset = aml_device_string(offset)
+    elif (directive == "ACPI_EXTRACT_DEVICE_END"):
+        offset = aml_device_end(offset)
     else:
         die("Unsupported directive %s" % directive)
 
