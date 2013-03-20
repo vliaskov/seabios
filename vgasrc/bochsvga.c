@@ -319,6 +319,7 @@ bochsvga_set_mode(struct vgamode_s *vmode_g, int flags)
         stdvga_sequ_mask(0x04, 0x00, 0x08);
         stdvga_grdc_mask(0x05, 0x20, 0x40);
     }
+    stdvga_attrindex_write(0x20);
 
     return 0;
 }
@@ -329,9 +330,9 @@ bochsvga_set_mode(struct vgamode_s *vmode_g, int flags)
  ****************************************************************/
 
 int
-bochsvga_init(void)
+bochsvga_setup(void)
 {
-    int ret = stdvga_init();
+    int ret = stdvga_setup();
     if (ret)
         return ret;
 

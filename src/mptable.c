@@ -8,12 +8,11 @@
 #include "util.h" // dprintf
 #include "config.h" // CONFIG_*
 #include "mptable.h" // MPTABLE_SIGNATURE
-#include "paravirt.h" // qemu_cfg_irq0_override
 #include "pci.h"
 #include "pci_regs.h"
 
 void
-mptable_init(void)
+mptable_setup(void)
 {
     if (! CONFIG_MPTABLE)
         return;
@@ -29,7 +28,7 @@ mptable_init(void)
     memset(config, 0, sizeof(*config));
     config->signature = MPCONFIG_SIGNATURE;
     config->spec = 4;
-    memcpy(config->oemid, CONFIG_CPUNAME8, sizeof(config->oemid));
+    memcpy(config->oemid, BUILD_CPUNAME8, sizeof(config->oemid));
     memcpy(config->productid, "0.1         ", sizeof(config->productid));
     config->lapic = BUILD_APIC_ADDR;
 
@@ -143,7 +142,7 @@ mptable_init(void)
         intsrc->srcbusirq = i;
         intsrc->dstapic = ioapic_id;
         intsrc->dstirq = i;
-        if (qemu_cfg_irq0_override()) {
+        if (romfile_loadint("etc/irq0-override", 0)) {
             /* Destination 2 is covered by irq0->inti2 override (i ==
                0). Source IRQ 2 is unused */
             if (i == 0)

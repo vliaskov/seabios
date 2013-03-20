@@ -12,6 +12,8 @@
 #include "boot.h" // boot_add_cbfs
 #include "disk.h" // MAXDESCSIZE
 #include "config.h" // CONFIG_*
+#include "acpi.h" // find_acpi_features
+#include "pci.h" // pci_probe_devices
 
 
 /****************************************************************
@@ -123,8 +125,11 @@ const char *CBvendor = "", *CBpart = "";
 
 // Populate max ram and e820 map info by scanning for a coreboot table.
 void
-coreboot_setup(void)
+coreboot_preinit(void)
 {
+    if (!CONFIG_COREBOOT)
+        return;
+
     dprintf(3, "Attempting to find coreboot table\n");
 
     // Find coreboot table.
@@ -143,27 +148,14 @@ coreboot_setup(void)
     if (!cbm)
         goto fail;
 
-    u64 maxram = 0, maxram_over4G = 0;
     int i, count = MEM_RANGE_COUNT(cbm);
     for (i=0; i<count; i++) {
         struct cb_memory_range *m = &cbm->map[i];
         u32 type = m->type;
-        if (type == CB_MEM_TABLE) {
+        if (type == CB_MEM_TABLE)
             type = E820_RESERVED;
-        } else if (type == E820_ACPI || type == E820_RAM) {
-            u64 end = m->start + m->size;
-            if (end > 0x100000000ull) {
-                end -= 0x100000000ull;
-                if (end > maxram_over4G)
-                    maxram_over4G = end;
-            } else if (end > maxram)
-                maxram = end;
-        }
         add_e820(m->start, m->size, type);
     }
-
-    RamSize = maxram;
-    RamSizeOver4G = maxram_over4G;
 
     // Ughh - coreboot likes to set a map at 0x0000-0x1000, but this
     // confuses grub.  So, override it.
@@ -181,8 +173,6 @@ coreboot_setup(void)
 fail:
     // No table found..  Use 16Megs as a dummy value.
     dprintf(1, "Unable to find coreboot table!\n");
-    RamSize = 16*1024*1024;
-    RamSizeOver4G = 0;
     add_e820(0, 16*1024*1024, E820_RAM);
     return;
 }
@@ -204,10 +194,14 @@ scan_tables(u32 start, u32 size)
 }
 
 void
-coreboot_copy_biostable(void)
+coreboot_platform_setup(void)
 {
+    if (!CONFIG_COREBOOT)
+        return;
+    pci_probe_devices();
+
     struct cb_memory *cbm = CBMemTable;
-    if (! CONFIG_COREBOOT || !cbm)
+    if (!cbm)
         return;
 
     dprintf(3, "Relocating coreboot bios tables\n");
@@ -219,6 +213,8 @@ coreboot_copy_biostable(void)
         if (m->type == CB_MEM_TABLE)
             scan_tables(m->start, m->size);
     }
+
+    find_acpi_features();
 }
 
 
@@ -294,7 +290,7 @@ struct cbfs_file {
 static int
 cbfs_copyfile(struct romfile_s *file, void *dst, u32 maxlen)
 {
-    if (!CONFIG_COREBOOT || !CONFIG_COREBOOT_FLASH)
+    if (!CONFIG_COREBOOT_FLASH)
         return -1;
 
     u32 size = file->rawsize;
@@ -324,9 +320,9 @@ cbfs_copyfile(struct romfile_s *file, void *dst, u32 maxlen)
 }
 
 void
-coreboot_cbfs_setup(void)
+coreboot_cbfs_init(void)
 {
-    if (!CONFIG_COREBOOT || !CONFIG_COREBOOT_FLASH)
+    if (!CONFIG_COREBOOT_FLASH)
         return;
 
     struct cbfs_header *hdr = *(void **)CBFS_HEADPTR_ADDR;
@@ -352,7 +348,6 @@ coreboot_cbfs_setup(void)
         }
         memset(file, 0, sizeof(*file));
         strtcpy(file->name, cfile->filename, sizeof(file->name));
-        dprintf(3, "Found CBFS file: %s\n", file->name);
         file->size = file->rawsize = be32_to_cpu(cfile->len);
         file->id = (u32)cfile;
         file->copy = cbfs_copyfile;
@@ -392,7 +387,7 @@ struct cbfs_payload {
 void
 cbfs_run_payload(struct cbfs_file *file)
 {
-    if (!CONFIG_COREBOOT || !CONFIG_COREBOOT_FLASH || !file)
+    if (!CONFIG_COREBOOT_FLASH || !file)
         return;
     dprintf(1, "Run %s\n", file->filename);
     struct cbfs_payload *pay = (void*)file + be32_to_cpu(file->offset);
@@ -443,7 +438,7 @@ cbfs_run_payload(struct cbfs_file *file)
 void
 cbfs_payload_setup(void)
 {
-    if (!CONFIG_COREBOOT || !CONFIG_COREBOOT_FLASH)
+    if (!CONFIG_COREBOOT_FLASH)
         return;
     struct romfile_s *file = NULL;
     for (;;) {

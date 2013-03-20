@@ -8,22 +8,24 @@
 OUT=out/
 
 # Source files
-SRCBOTH=misc.c stacks.c pmm.c output.c util.c block.c floppy.c ata.c mouse.c \
+SRCBOTH=misc.c stacks.c output.c util.c block.c floppy.c ata.c mouse.c \
     kbd.c pci.c serial.c clock.c pic.c cdrom.c ps2port.c smp.c resume.c \
-    pnpbios.c pirtable.c vgahooks.c ramdisk.c pcibios.c blockcmd.c \
+    pnpbios.c vgahooks.c ramdisk.c pcibios.c blockcmd.c \
     usb.c usb-uhci.c usb-ohci.c usb-ehci.c usb-hid.c usb-msc.c \
     virtio-ring.c virtio-pci.c virtio-blk.c virtio-scsi.c apm.c ahci.c \
     usb-uas.c lsi-scsi.c esp-scsi.c megasas.c
 SRC16=$(SRCBOTH) system.c disk.c font.c
-SRC32FLAT=$(SRCBOTH) post.c shadow.c memmap.c coreboot.c boot.c \
-    acpi.c smm.c mptable.c smbios.c pciinit.c optionroms.c mtrr.c \
+SRC32FLAT=$(SRCBOTH) post.c shadow.c memmap.c pmm.c coreboot.c boot.c \
+    acpi.c smm.c mptable.c pirtable.c smbios.c pciinit.c optionroms.c mtrr.c \
     lzmadecode.c bootsplash.c jpeg.c usb-hub.c paravirt.c \
-    biostables.c xen.c bmp.c romfile.c
+    biostables.c xen.c bmp.c romfile.c csm.c
 SRC32SEG=util.c output.c pci.c pcibios.c apm.c stacks.c
 
 # Default compiler flags
 cc-option=$(shell if test -z "`$(1) $(2) -S -o /dev/null -xc /dev/null 2>&1`" \
     ; then echo "$(2)"; else echo "$(3)"; fi ;)
+
+CPPFLAGS = -P -MD -MT $@
 
 COMMONCFLAGS := -I$(OUT) -Os -MD -g \
     -Wall -Wno-strict-aliasing -Wold-style-definition \
@@ -63,6 +65,7 @@ OBJCOPY=objcopy
 OBJDUMP=objdump
 STRIP=strip
 PYTHON=python
+CPP=cpp
 IASL:=iasl
 
 # Default targets
@@ -84,7 +87,7 @@ vpath %.S src vgasrc
 ################ Common build rules
 
 # Verify the build environment works.
-TESTGCC:=$(shell CC="$(CC)" LD="$(LD)" IASL="$(IASL)" tools/test-build.sh)
+TESTGCC:=$(shell OUT="$(OUT)" CC="$(CC)" LD="$(LD)" IASL="$(IASL)" tools/test-build.sh)
 ifeq "$(TESTGCC)" "-1"
 $(error "Please upgrade the build environment")
 endif
@@ -97,7 +100,7 @@ endif
 # Do a whole file compile by textually including all C code.
 define whole-compile
 @echo "  Compiling whole program $3"
-$(Q)printf '$(foreach i,$2,#include "../$i"\n)' > $3.tmp.c
+$(Q)printf '$(foreach i,$2,#include "$(CURDIR)/$i"\n)' > $3.tmp.c
 $(Q)$(CC) $1 $(CFLAGSWHOLE) -c $3.tmp.c -o $3
 endef
 
@@ -115,7 +118,7 @@ $(OUT)%.o: %.c $(OUT)autoconf.h
 
 $(OUT)%.lds: %.lds.S
 	@echo "  Precompiling $@"
-	$(Q)$(CPP) -P -D__ASSEMBLY__ $< -o $@
+	$(Q)$(CPP) $(CPPFLAGS) -D__ASSEMBLY__ $< -o $@
 
 
 ################ Main BIOS build rules
@@ -126,17 +129,17 @@ $(OUT)asm-offsets.h: $(OUT)asm-offsets.s
 	@echo "  Generating offset file $@"
 	$(Q)./tools/gen-offsets.sh $< $@
 
-$(OUT)ccode16.o: $(OUT)autoconf.h $(patsubst %.c, out/%.o,$(SRC16)) ; $(call whole-compile, $(CFLAGS16), $(addprefix src/, $(SRC16)),$@)
+$(OUT)ccode16.o: $(OUT)autoconf.h $(patsubst %.c, $(OUT)%.o,$(SRC16)) ; $(call whole-compile, $(CFLAGS16), $(addprefix src/, $(SRC16)),$@)
 
-$(OUT)code32seg.o: $(OUT)autoconf.h $(patsubst %.c, out/%.o,$(SRC32SEG)) ; $(call whole-compile, $(CFLAGS32SEG), $(addprefix src/, $(SRC32SEG)),$@)
+$(OUT)code32seg.o: $(OUT)autoconf.h $(patsubst %.c, $(OUT)%.o,$(SRC32SEG)) ; $(call whole-compile, $(CFLAGS32SEG), $(addprefix src/, $(SRC32SEG)),$@)
 
-$(OUT)ccode32flat.o: $(OUT)autoconf.h $(patsubst %.c, out/%.o,$(SRC32FLAT)) ; $(call whole-compile, $(CFLAGS32FLAT), $(addprefix src/, $(SRC32FLAT)),$@)
+$(OUT)ccode32flat.o: $(OUT)autoconf.h $(patsubst %.c, $(OUT)%.o,$(SRC32FLAT)) ; $(call whole-compile, $(CFLAGS32FLAT), $(addprefix src/, $(SRC32FLAT)),$@)
 
 $(OUT)romlayout.o: romlayout.S $(OUT)asm-offsets.h
 	@echo "  Compiling (16bit) $@"
 	$(Q)$(CC) $(CFLAGS16) -c -D__ASSEMBLY__ $< -o $@
 
-$(OUT)romlayout16.lds: $(OUT)ccode32flat.o $(OUT)code32seg.o $(OUT)ccode16.o $(OUT)romlayout.o tools/layoutrom.py
+$(OUT)romlayout16.lds: $(OUT)ccode32flat.o $(OUT)code32seg.o $(OUT)ccode16.o $(OUT)romlayout.o tools/layoutrom.py tools/buildversion.sh
 	@echo "  Building ld scripts"
 	$(Q)./tools/buildversion.sh $(OUT)version.c
 	$(Q)$(CC) $(CFLAGS32FLAT) -c $(OUT)version.c -o $(OUT)version.o
@@ -183,7 +186,7 @@ CFLAGS16VGA = $(CFLAGS16INC) -Isrc
 
 $(OUT)vgaccode16.raw.s: $(OUT)autoconf.h ; $(call whole-compile, $(CFLAGS16VGA) -S, $(SRCVGA),$@)
 
-$(OUT)vgaccode16.o: $(OUT)vgaccode16.raw.s
+$(OUT)vgaccode16.o: $(OUT)vgaccode16.raw.s tools/vgafixup.py
 	@echo "  Fixup VGA rom assembler"
 	$(Q)$(PYTHON) ./tools/vgafixup.py $< $(OUT)vgaccode16.s
 	$(Q)$(AS) --32 src/code16gcc.s $(OUT)vgaccode16.s -o $@
@@ -192,7 +195,7 @@ $(OUT)vgaentry.o: vgaentry.S $(OUT)autoconf.h
 	@echo "  Compiling (16bit) $@"
 	$(Q)$(CC) $(CFLAGS16VGA) -c -D__ASSEMBLY__ $< -o $@
 
-$(OUT)vgarom.o: $(OUT)vgaccode16.o $(OUT)vgaentry.o $(OUT)vgalayout.lds
+$(OUT)vgarom.o: $(OUT)vgaccode16.o $(OUT)vgaentry.o $(OUT)vgalayout.lds tools/buildversion.sh
 	@echo "  Linking $@"
 	$(Q)./tools/buildversion.sh $(OUT)vgaversion.c VAR16
 	$(Q)$(CC) $(CFLAGS16VGA) -c $(OUT)vgaversion.c -o $(OUT)vgaversion.o
@@ -214,13 +217,13 @@ iasl-option=$(shell if test -z "`$(1) $(2) 2>&1 > /dev/null`" \
 
 $(OUT)%.hex: src/%.dsl ./tools/acpi_extract_preprocess.py ./tools/acpi_extract.py
 	@echo "  Compiling IASL $@"
-	$(Q)cpp -P $< > $(OUT)$*.dsl.i.orig
+	$(Q)$(CPP) $(CPPFLAGS) $< -o $(OUT)$*.dsl.i.orig
 	$(Q)$(PYTHON) ./tools/acpi_extract_preprocess.py $(OUT)$*.dsl.i.orig > $(OUT)$*.dsl.i
 	$(Q)$(IASL) $(call iasl-option,$(IASL),-Pn,) -vs -l -tc -p $(OUT)$* $(OUT)$*.dsl.i
 	$(Q)$(PYTHON) ./tools/acpi_extract.py $(OUT)$*.lst > $(OUT)$*.off
 	$(Q)cat $(OUT)$*.off > $@
 
-$(OUT)acpi.o: $(OUT)acpi-dsdt.hex $(OUT)ssdt-proc.hex $(OUT)ssdt-pcihp.hex $(OUT)ssdt-susp.hex $(OUT)q35-acpi-dsdt.hex
+$(OUT)acpi.o: $(OUT)acpi-dsdt.hex $(OUT)ssdt-proc.hex $(OUT)ssdt-pcihp.hex $(OUT)ssdt-misc.hex $(OUT)q35-acpi-dsdt.hex
 
 ################ Kconfig rules
 
@@ -231,7 +234,7 @@ $(Q)$(MAKE) -C $(OUT) -f $(CURDIR)/tools/kconfig/Makefile srctree=$(CURDIR) src=
 endef
 
 $(OUT)autoconf.h : $(KCONFIG_CONFIG) ; $(call do-kconfig, silentoldconfig)
-$(KCONFIG_CONFIG): ; $(call do-kconfig, defconfig)
+$(KCONFIG_CONFIG): src/Kconfig vgasrc/Kconfig ; $(call do-kconfig, defconfig)
 %onfig: ; $(call do-kconfig, $@)
 help: ; $(call do-kconfig, $@)
 

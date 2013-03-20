@@ -6,8 +6,8 @@
 
 #include "util.h" // dprintf
 #include "config.h" // CONFIG_*
-#include "xen.h" // usingXen
 #include "pci.h" // pcimem_start
+#include "paravirt.h" // RamSize
 
 #define MSR_MTRRcap                    0x000000fe
 #define MSR_MTRRfix64K_00000           0x00000250
@@ -34,7 +34,7 @@
 
 void mtrr_setup(void)
 {
-    if (!CONFIG_MTRR_INIT || CONFIG_COREBOOT || usingXen())
+    if (!CONFIG_MTRR_INIT)
         return;
 
     u32 eax, ebx, ecx, edx, cpuid_features;

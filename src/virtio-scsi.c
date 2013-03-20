@@ -14,7 +14,7 @@
 #include "pci_ids.h" // PCI_DEVICE_ID_VIRTIO_BLK
 #include "pci_regs.h" // PCI_VENDOR_ID
 #include "boot.h" // bootprio_find_scsi_device
-#include "blockcmd.h" // scsi_init_drive
+#include "blockcmd.h" // scsi_drive_setup
 #include "virtio-pci.h"
 #include "virtio-ring.h"
 #include "virtio-scsi.h"
@@ -114,7 +114,7 @@ virtio_scsi_add_lun(struct pci_device *pci, u16 ioaddr,
     vlun->lun = lun;
 
     int prio = bootprio_find_scsi_device(pci, target, lun);
-    int ret = scsi_init_drive(&vlun->drive, "virtio-scsi", prio);
+    int ret = scsi_drive_setup(&vlun->drive, "virtio-scsi", prio);
     if (ret)
         goto fail;
     return 0;
@@ -147,6 +147,9 @@ init_virtio_scsi(struct pci_device *pci)
         goto fail;
     }
 
+    vp_set_status(ioaddr, VIRTIO_CONFIG_S_ACKNOWLEDGE |
+                  VIRTIO_CONFIG_S_DRIVER | VIRTIO_CONFIG_S_DRIVER_OK);
+
     int i, tot;
     for (tot = 0, i = 0; i < 256; i++)
         tot += virtio_scsi_scan_target(pci, ioaddr, vq, i);
@@ -154,8 +157,6 @@ init_virtio_scsi(struct pci_device *pci)
     if (!tot)
         goto fail;
 
-    vp_set_status(ioaddr, VIRTIO_CONFIG_S_ACKNOWLEDGE |
-                  VIRTIO_CONFIG_S_DRIVER | VIRTIO_CONFIG_S_DRIVER_OK);
     return;
 
 fail:
@@ -166,7 +167,7 @@ void
 virtio_scsi_setup(void)
 {
     ASSERT32FLAT();
-    if (! CONFIG_VIRTIO_SCSI || CONFIG_COREBOOT)
+    if (! CONFIG_VIRTIO_SCSI)
         return;
 
     dprintf(3, "init virtio-scsi\n");

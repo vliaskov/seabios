@@ -17,7 +17,8 @@
 #include "pci_ids.h" // PCI_DEVICE_ID
 #include "pci_regs.h" // PCI_VENDOR_ID
 #include "boot.h" // bootprio_find_scsi_device
-#include "blockcmd.h" // scsi_init_drive
+#include "blockcmd.h" // scsi_drive_setup
+#include "paravirt.h" // runningOnQEMU
 #include "disk.h"
 
 #define ESP_TCLO      0x00
@@ -174,7 +175,7 @@ esp_scsi_add_lun(struct pci_device *pci, u32 iobase, u8 target, u8 lun)
                           pci_bdf_to_bus(pci->bdf), pci_bdf_to_dev(pci->bdf),
                           pci_bdf_to_fn(pci->bdf), target, lun);
     int prio = bootprio_find_scsi_device(pci, target, lun);
-    int ret = scsi_init_drive(&llun->drive, name, prio);
+    int ret = scsi_drive_setup(&llun->drive, name, prio);
     free(name);
     if (ret)
         goto fail;
@@ -218,7 +219,7 @@ void
 esp_scsi_setup(void)
 {
     ASSERT32FLAT();
-    if (!CONFIG_ESP_SCSI)
+    if (!CONFIG_ESP_SCSI || !runningOnQEMU())
         return;
 
     dprintf(3, "init esp\n");

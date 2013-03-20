@@ -6,10 +6,11 @@
 
 #include "config.h"
 #include "xen.h"
-
+#include "paravirt.h" // PlatformRunningOn
 #include "memmap.h" // add_e820
 #include "types.h" // ASM32FLAT
 #include "util.h" // copy_acpi_rsdp
+#include "acpi.h" // find_acpi_features
 
 #define INFO_PHYSICAL_ADDRESS 0x00001000
 
@@ -47,7 +48,7 @@ static void validate_info(struct xen_seabios_info *t)
         panic("Bad Xen info checksum\n");
 }
 
-void xen_probe(void)
+void xen_preinit(void)
 {
     u32 base, eax, ebx, ecx, edx;
     char signature[13];
@@ -76,8 +77,11 @@ void xen_probe(void)
             break;
         }
     }
-    if (!xen_cpuid_base)
+    if (!xen_cpuid_base) {
         dprintf(1, "No Xen hypervisor found.\n");
+        return;
+    }
+    PlatformRunningOn = PF_QEMU|PF_XEN;
 }
 
 static int hypercall_xen_version( int cmd, void *arg)
@@ -86,13 +90,13 @@ static int hypercall_xen_version( int cmd, void *arg)
 }
 
 /* Fill in hypercall transfer pages. */
-void xen_init_hypercalls(void)
+void xen_hypercall_setup(void)
 {
     u32 eax, ebx, ecx, edx;
     xen_extraversion_t extraversion;
     unsigned long i;
 
-    if (!usingXen())
+    if (!runningOnXen())
         return;
 
     cpuid(xen_cpuid_base + 2, &eax, &ebx, &ecx, &edx);
@@ -111,7 +115,7 @@ void xen_init_hypercalls(void)
     dprintf(1, "Detected Xen v%u.%u%s\n", eax >> 16, eax & 0xffff, extraversion);
 }
 
-void xen_copy_biostables(void)
+void xen_biostable_setup(void)
 {
     struct xen_seabios_info *info = (void *)INFO_PHYSICAL_ADDRESS;
     void **tables = (void*)info->tables;
@@ -120,11 +124,12 @@ void xen_copy_biostables(void)
     dprintf(1, "xen: copy BIOS tables...\n");
     for (i=0; i<info->tables_nr; i++)
         copy_table(tables[i]);
+
+    find_acpi_features();
 }
 
-void xen_setup(void)
+void xen_ramsize_preinit(void)
 {
-    u64 maxram = 0, maxram_over4G = 0;
     int i;
     struct xen_seabios_info *info = (void *)INFO_PHYSICAL_ADDRESS;
     struct e820entry *e820 = (struct e820entry *)info->e820;
@@ -134,18 +139,6 @@ void xen_setup(void)
 
     for (i = 0; i < info->e820_nr; i++) {
         struct e820entry *e = &e820[i];
-        if (e->type == E820_ACPI || e->type == E820_RAM) {
-            u64 end = e->start + e->size;
-            if (end > 0x100000000ull) {
-                end -= 0x100000000ull;
-                if (end > maxram_over4G)
-                    maxram_over4G = end;
-            } else if (end > maxram)
-                maxram = end;
-        }
         add_e820(e->start, e->size, e->type);
     }
-
-    RamSize = maxram;
-    RamSizeOver4G = maxram_over4G;
 }

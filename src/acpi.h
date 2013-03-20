@@ -3,8 +3,23 @@
 
 #include "types.h" // u32
 
-void acpi_bios_init(void);
+/*
+ * ACPI 2.0 Generic Address Space definition.
+ */
+struct acpi_20_generic_address {
+    u8  address_space_id;
+    u8  register_bit_width;
+    u8  register_bit_offset;
+    u8  reserved;
+    u64 address;
+} PACKED;
+#define acpi_ga_to_bdf(addr) pci_to_bdf(0, (addr >> 32) & 0xffff, (addr >> 16) & 0xffff)
+
+void acpi_setup(void);
 u32 find_resume_vector(void);
+void find_acpi_features(void);
+void acpi_set_reset_reg(struct acpi_20_generic_address *reg, u8 val);
+void acpi_reboot(void);
 
 #define RSDP_SIGNATURE 0x2052545020445352LL // "RSD PTR "
 
@@ -96,15 +111,6 @@ struct fadt_descriptor_rev1
 #else
     u32 flags;
 #endif
-} PACKED;
-
-struct bfld {
-    u64 p0s;  /* pci window 0 (below 4g) - start  */
-    u64 p0e;  /* pci window 0 (below 4g) - end    */
-    u64 p0l;  /* pci window 0 (below 4g) - length */
-    u64 p1s;  /* pci window 1 (above 4g) - start  */
-    u64 p1e;  /* pci window 1 (above 4g) - end    */
-    u64 p1l;  /* pci window 1 (above 4g) - length */
 } PACKED;
 
 /* PCI fw r3.0 MCFG table. */

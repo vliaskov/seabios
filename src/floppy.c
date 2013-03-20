@@ -23,12 +23,13 @@
 #define FLOPPY_FILLBYTE 0xf6
 #define FLOPPY_GAPLEN 0x1B
 #define FLOPPY_FORMAT_GAPLEN 0x6c
+#define FLOPPY_PIO_TIMEOUT 1000
 
 // New diskette parameter table adding 3 parameters from IBM
 // Since no provisions are made for multiple drive types, most
 // values in this table are ignored.  I set parameters for 1.44M
 // floppy here
-struct floppy_ext_dbt_s diskette_param_table2 VAR16VISIBLE = {
+struct floppy_ext_dbt_s diskette_param_table2 VARFSEG = {
     .dbt = {
         .specify1       = 0xAF, // step rate 12ms, head unload 240ms
         .specify2       = 0x02, // head load time 4ms, DMA used
@@ -51,29 +52,37 @@ struct floppy_dbt_s diskette_param_table VAR16FIXED(0xefc7);
 
 struct floppyinfo_s {
     struct chs_s chs;
-    u8 config_data;
-    u8 media_state;
+    u8 floppy_size;
+    u8 data_rate;
 };
 
-struct floppyinfo_s FloppyInfo[] VAR16VISIBLE = {
+#define FLOPPY_SIZE_525 0x01
+#define FLOPPY_SIZE_350 0x02
+
+#define FLOPPY_RATE_500K 0x00
+#define FLOPPY_RATE_300K 0x01
+#define FLOPPY_RATE_250K 0x02
+#define FLOPPY_RATE_1M   0x03
+
+struct floppyinfo_s FloppyInfo[] VARFSEG = {
     // Unknown
     { {0, 0, 0}, 0x00, 0x00},
     // 1 - 360KB, 5.25" - 2 heads, 40 tracks, 9 sectors
-    { {2, 40, 9}, 0x00, 0x25},
+    { {2, 40, 9}, FLOPPY_SIZE_525, FLOPPY_RATE_300K},
     // 2 - 1.2MB, 5.25" - 2 heads, 80 tracks, 15 sectors
-    { {2, 80, 15}, 0x00, 0x25},
+    { {2, 80, 15}, FLOPPY_SIZE_525, FLOPPY_RATE_500K},
     // 3 - 720KB, 3.5"  - 2 heads, 80 tracks, 9 sectors
-    { {2, 80, 9}, 0x00, 0x17},
+    { {2, 80, 9}, FLOPPY_SIZE_350, FLOPPY_RATE_250K},
     // 4 - 1.44MB, 3.5" - 2 heads, 80 tracks, 18 sectors
-    { {2, 80, 18}, 0x00, 0x17},
+    { {2, 80, 18}, FLOPPY_SIZE_350, FLOPPY_RATE_500K},
     // 5 - 2.88MB, 3.5" - 2 heads, 80 tracks, 36 sectors
-    { {2, 80, 36}, 0xCC, 0xD7},
+    { {2, 80, 36}, FLOPPY_SIZE_350, FLOPPY_RATE_1M},
     // 6 - 160k, 5.25"  - 1 heads, 40 tracks, 8 sectors
-    { {1, 40, 8}, 0x00, 0x27},
+    { {1, 40, 8}, FLOPPY_SIZE_525, FLOPPY_RATE_250K},
     // 7 - 180k, 5.25"  - 1 heads, 40 tracks, 9 sectors
-    { {1, 40, 9}, 0x00, 0x27},
+    { {1, 40, 9}, FLOPPY_SIZE_525, FLOPPY_RATE_300K},
     // 8 - 320k, 5.25"  - 2 heads, 40 tracks, 8 sectors
-    { {2, 40, 8}, 0x00, 0x27},
+    { {2, 40, 8}, FLOPPY_SIZE_525, FLOPPY_RATE_250K},
 };
 
 struct drive_s *
@@ -125,19 +134,19 @@ floppy_setup(void)
         return;
     dprintf(3, "init floppy drives\n");
 
-    if (CONFIG_COREBOOT) {
+    if (CONFIG_QEMU) {
+        u8 type = inb_cmos(CMOS_FLOPPY_DRIVE_TYPE);
+        if (type & 0xf0)
+            addFloppy(0, type >> 4);
+        if (type & 0x0f)
+            addFloppy(1, type & 0x0f);
+    } else {
         u8 type = romfile_loadint("etc/floppy0", 0);
         if (type)
             addFloppy(0, type);
         type = romfile_loadint("etc/floppy1", 0);
         if (type)
             addFloppy(1, type);
-    } else {
-        u8 type = inb_cmos(CMOS_FLOPPY_DRIVE_TYPE);
-        if (type & 0xf0)
-            addFloppy(0, type >> 4);
-        if (type & 0x0f)
-            addFloppy(1, type & 0x0f);
     }
 
     outb(0x02, PORT_DMA1_MASK_REG);
@@ -164,89 +173,276 @@ find_floppy_type(u32 size)
  ****************************************************************/
 
 static void
-floppy_reset_controller(void)
+floppy_disable_controller(void)
 {
-    // Reset controller
-    u8 val8 = inb(PORT_FD_DOR);
-    outb(val8 & ~0x04, PORT_FD_DOR);
-    outb(val8 | 0x04, PORT_FD_DOR);
-
-    // Wait for controller to come out of reset
-    while ((inb(PORT_FD_STATUS) & 0xc0) != 0x80)
-        ;
+    outb(inb(PORT_FD_DOR) & ~0x04, PORT_FD_DOR);
 }
 
 static int
-wait_floppy_irq(void)
+floppy_wait_irq(void)
 {
-    ASSERT16();
-    u8 frs;
+    u8 frs = GET_BDA(floppy_recalibration_status);
+    SET_BDA(floppy_recalibration_status, frs & ~FRS_IRQ);
     for (;;) {
-        if (!GET_BDA(floppy_motor_counter))
-            return -1;
+        if (!GET_BDA(floppy_motor_counter)) {
+            floppy_disable_controller();
+            return DISK_RET_ETIMEOUT;
+        }
         frs = GET_BDA(floppy_recalibration_status);
-        if (frs & FRS_TIMEOUT)
+        if (frs & FRS_IRQ)
             break;
         // Could use yield_toirq() here, but that causes issues on
         // bochs, so use yield() instead.
         yield();
     }
 
-    frs &= ~FRS_TIMEOUT;
-    SET_BDA(floppy_recalibration_status, frs);
-    return 0;
+    SET_BDA(floppy_recalibration_status, frs & ~FRS_IRQ);
+    return DISK_RET_SUCCESS;
 }
 
-static void
-floppy_prepare_controller(u8 floppyid)
+struct floppy_pio_s {
+    u8 cmdlen;
+    u8 resplen;
+    u8 waitirq;
+    u8 data[9];
+};
+
+static int
+floppy_pio(struct floppy_pio_s *pio)
 {
-    u8 frs = GET_BDA(floppy_recalibration_status);
-    SET_BDA(floppy_recalibration_status, frs & ~FRS_TIMEOUT);
+    // Send command to controller.
+    u64 end = calc_future_tsc(FLOPPY_PIO_TIMEOUT);
+    int i = 0;
+    for (;;) {
+        u8 sts = inb(PORT_FD_STATUS);
+        if (!(sts & 0x80)) {
+            if (check_tsc(end)) {
+                floppy_disable_controller();
+                return DISK_RET_ETIMEOUT;
+            }
+            continue;
+        }
+        if (sts & 0x40) {
+            floppy_disable_controller();
+            return DISK_RET_ECONTROLLER;
+        }
+        outb(pio->data[i++], PORT_FD_DATA);
+        if (i >= pio->cmdlen)
+            break;
+    }
 
-    // turn on motor of selected drive, DMA & int enabled, normal operation
-    u8 prev_reset = inb(PORT_FD_DOR) & 0x04;
-    u8 dor = 0x10;
-    if (floppyid)
-        dor = 0x20;
-    dor |= 0x0c;
-    dor |= floppyid;
-    outb(dor, PORT_FD_DOR);
+    // Wait for command to complete.
+    if (pio->waitirq) {
+        int ret = floppy_wait_irq();
+        if (ret)
+            return ret;
+    }
 
+    // Read response from controller.
+    end = calc_future_tsc(FLOPPY_PIO_TIMEOUT);
+    i = 0;
+    for (;;) {
+        u8 sts = inb(PORT_FD_STATUS);
+        if (!(sts & 0x80)) {
+            if (check_tsc(end)) {
+                floppy_disable_controller();
+                return DISK_RET_ETIMEOUT;
+            }
+            continue;
+        }
+        if (i >= pio->resplen)
+            break;
+        if (!(sts & 0x40)) {
+            floppy_disable_controller();
+            return DISK_RET_ECONTROLLER;
+        }
+        pio->data[i++] = inb(PORT_FD_DATA);
+    }
+
+    return DISK_RET_SUCCESS;
+}
+
+static int
+floppy_enable_controller(void)
+{
+    outb(inb(PORT_FD_DOR) | 0x04, PORT_FD_DOR);
+    int ret = floppy_wait_irq();
+    if (ret)
+        return ret;
+
+    struct floppy_pio_s pio;
+    pio.cmdlen = 1;
+    pio.resplen = 2;
+    pio.waitirq = 0;
+    pio.data[0] = 0x08;  // 08: Check Interrupt Status
+    return floppy_pio(&pio);
+}
+
+static int
+floppy_select_drive(u8 floppyid)
+{
     // reset the disk motor timeout value of INT 08
     SET_BDA(floppy_motor_counter, FLOPPY_MOTOR_TICKS);
 
-    // wait for drive readiness
-    while ((inb(PORT_FD_STATUS) & 0xc0) != 0x80)
-        ;
+    // Enable controller if it isn't running.
+    u8 dor = inb(PORT_FD_DOR);
+    if (!(dor & 0x04)) {
+        int ret = floppy_enable_controller();
+        if (ret)
+            return ret;
+    }
 
-    if (!prev_reset)
-        wait_floppy_irq();
+    // Turn on motor of selected drive, DMA & int enabled, normal operation
+    dor = (floppyid ? 0x20 : 0x10) | 0x0c | floppyid;
+    outb(dor, PORT_FD_DOR);
+
+    return DISK_RET_SUCCESS;
+}
+
+
+/****************************************************************
+ * Floppy media sense
+ ****************************************************************/
+
+static inline void
+set_diskette_current_cyl(u8 floppyid, u8 cyl)
+{
+    SET_BDA(floppy_track[floppyid], cyl);
 }
 
 static int
-floppy_pio(u8 *cmd, u8 cmdlen)
+floppy_drive_recal(u8 floppyid)
 {
-    floppy_prepare_controller(cmd[1] & 1);
+    int ret = floppy_select_drive(floppyid);
+    if (ret)
+        return ret;
 
-    // send command to controller
-    u8 i;
-    for (i=0; i<cmdlen; i++)
-        outb(cmd[i], PORT_FD_DATA);
+    // send Recalibrate command (2 bytes) to controller
+    struct floppy_pio_s pio;
+    pio.cmdlen = 2;
+    pio.resplen = 0;
+    pio.waitirq = 1;
+    pio.data[0] = 0x07;  // 07: Recalibrate
+    pio.data[1] = floppyid; // 0=drive0, 1=drive1
+    ret = floppy_pio(&pio);
+    if (ret)
+        return ret;
 
-    int ret = wait_floppy_irq();
-    if (ret) {
-        floppy_reset_controller();
+    pio.cmdlen = 1;
+    pio.resplen = 2;
+    pio.waitirq = 0;
+    pio.data[0] = 0x08;  // 08: Check Interrupt Status
+    ret = floppy_pio(&pio);
+    if (ret)
+        return ret;
+
+    u8 frs = GET_BDA(floppy_recalibration_status);
+    SET_BDA(floppy_recalibration_status, frs | (1<<floppyid));
+    set_diskette_current_cyl(floppyid, 0);
+    return DISK_RET_SUCCESS;
+}
+
+static int
+floppy_drive_readid(u8 floppyid, u8 data_rate, u8 head)
+{
+    int ret = floppy_select_drive(floppyid);
+    if (ret)
+        return ret;
+
+    // Set data rate.
+    outb(data_rate, PORT_FD_DIR);
+
+    // send Read Sector Id command
+    struct floppy_pio_s pio;
+    pio.cmdlen = 2;
+    pio.resplen = 7;
+    pio.waitirq = 1;
+    pio.data[0] = 0x4a;  // 0a: Read Sector Id
+    pio.data[1] = (head << 2) | floppyid; // HD DR1 DR2
+    ret = floppy_pio(&pio);
+    if (ret)
+        return ret;
+    if (pio.data[0] & 0xc0)
         return -1;
-    }
-
     return 0;
 }
 
 static int
-floppy_cmd(struct disk_op_s *op, u16 count, u8 *cmd, u8 cmdlen)
+floppy_media_sense(struct drive_s *drive_g)
 {
+    u8 ftype = GET_GLOBAL(drive_g->floppy_type), stype = ftype;
+    u8 floppyid = GET_GLOBAL(drive_g->cntl_id);
+
+    u8 data_rate = GET_GLOBAL(FloppyInfo[stype].data_rate);
+    int ret = floppy_drive_readid(floppyid, data_rate, 0);
+    if (ret) {
+        // Attempt media sense.
+        for (stype=1; ; stype++) {
+            if (stype >= ARRAY_SIZE(FloppyInfo))
+                return DISK_RET_EMEDIA;
+            if (stype==ftype
+                || (GET_GLOBAL(FloppyInfo[stype].floppy_size)
+                    != GET_GLOBAL(FloppyInfo[ftype].floppy_size))
+                || (GET_GLOBAL(FloppyInfo[stype].chs.heads)
+                    > GET_GLOBAL(FloppyInfo[ftype].chs.heads))
+                || (GET_GLOBAL(FloppyInfo[stype].chs.cylinders)
+                    > GET_GLOBAL(FloppyInfo[ftype].chs.cylinders))
+                || (GET_GLOBAL(FloppyInfo[stype].chs.spt)
+                    > GET_GLOBAL(FloppyInfo[ftype].chs.spt)))
+                continue;
+            data_rate = GET_GLOBAL(FloppyInfo[stype].data_rate);
+            ret = floppy_drive_readid(floppyid, data_rate, 0);
+            if (!ret)
+                break;
+        }
+    }
+
+    u8 old_data_rate = GET_BDA(floppy_media_state[floppyid]) >> 6;
+    SET_BDA(floppy_last_data_rate, (old_data_rate<<2) | (data_rate<<6));
+    u8 media = (stype == 1 ? 0x04 : (stype == 2 ? 0x05 : 0x07));
+    u8 fms = (data_rate<<6) | FMS_MEDIA_DRIVE_ESTABLISHED | media;
+    if (GET_GLOBAL(FloppyInfo[stype].chs.cylinders)
+        < GET_GLOBAL(FloppyInfo[ftype].chs.cylinders))
+        fms |= FMS_DOUBLE_STEPPING;
+    SET_BDA(floppy_media_state[floppyid], fms);
+
+    return DISK_RET_SUCCESS;
+}
+
+static int
+check_recal_drive(struct drive_s *drive_g)
+{
+    u8 floppyid = GET_GLOBAL(drive_g->cntl_id);
+    if ((GET_BDA(floppy_recalibration_status) & (1<<floppyid))
+        && (GET_BDA(floppy_media_state[floppyid]) & FMS_MEDIA_DRIVE_ESTABLISHED))
+        // Media is known.
+        return DISK_RET_SUCCESS;
+
+    // Recalibrate drive.
+    int ret = floppy_drive_recal(floppyid);
+    if (ret)
+        return ret;
+
+    // Sense media.
+    return floppy_media_sense(drive_g);
+}
+
+
+/****************************************************************
+ * Floppy DMA
+ ****************************************************************/
+
+// Perform a floppy transfer command (setup DMA and issue PIO).
+static int
+floppy_cmd(struct disk_op_s *op, int blocksize, struct floppy_pio_s *pio)
+{
+    int ret = check_recal_drive(op->drive_g);
+    if (ret)
+        return ret;
+
     // es:bx = pointer to where to place information from diskette
     u32 addr = (u32)op->buf_fl;
+    int count = op->count * blocksize;
 
     // check for 64K boundary overrun
     u16 end = count - 1;
@@ -255,7 +451,7 @@ floppy_cmd(struct disk_op_s *op, u16 count, u8 *cmd, u8 cmdlen)
         return DISK_RET_EBOUNDARY;
 
     u8 mode_register = 0x4a; // single mode, increment, autoinit disable,
-    if (cmd[0] == 0xe6)
+    if (pio->data[0] == 0xe6)
         // read
         mode_register = 0x46;
 
@@ -277,106 +473,33 @@ floppy_cmd(struct disk_op_s *op, u16 count, u8 *cmd, u8 cmdlen)
 
     outb(0x02, PORT_DMA1_MASK_REG); // unmask channel 2
 
-    int ret = floppy_pio(cmd, cmdlen);
+    ret = floppy_select_drive(pio->data[1] & 1);
     if (ret)
-        return DISK_RET_ETIMEOUT;
+        return ret;
+    pio->resplen = 7;
+    pio->waitirq = 1;
+    ret = floppy_pio(pio);
+    if (ret)
+        return ret;
 
-    // check port 3f4 for accessibility to status bytes
-    if ((inb(PORT_FD_STATUS) & 0xc0) != 0xc0)
+    // Populate floppy_return_status in BDA
+    int i;
+    for (i=0; i<7; i++)
+        SET_BDA(floppy_return_status[i], pio->data[i]);
+
+    if (pio->data[0] & 0xc0) {
+        if (pio->data[1] & 0x02)
+            return DISK_RET_EWRITEPROTECT;
+        dprintf(1, "floppy error: %02x %02x %02x %02x %02x %02x %02x\n"
+                , pio->data[0], pio->data[1], pio->data[2], pio->data[3]
+                , pio->data[4], pio->data[5], pio->data[6]);
         return DISK_RET_ECONTROLLER;
-
-    // read 7 return status bytes from controller
-    u8 i;
-    for (i=0; i<7; i++) {
-        u8 v = inb(PORT_FD_DATA);
-        cmd[i] = v;
-        SET_BDA(floppy_return_status[i], v);
     }
 
+    u8 track = (pio->cmdlen == 9 ? pio->data[3] : 0);
+    set_diskette_current_cyl(pio->data[0] & 1, track);
+
     return DISK_RET_SUCCESS;
-}
-
-
-/****************************************************************
- * Floppy media sense
- ****************************************************************/
-
-static inline void
-set_diskette_current_cyl(u8 floppyid, u8 cyl)
-{
-    SET_BDA(floppy_track[floppyid], cyl);
-}
-
-static void
-floppy_drive_recal(u8 floppyid)
-{
-    // send Recalibrate command (2 bytes) to controller
-    u8 data[12];
-    data[0] = 0x07;  // 07: Recalibrate
-    data[1] = floppyid; // 0=drive0, 1=drive1
-    floppy_pio(data, 2);
-
-    u8 frs = GET_BDA(floppy_recalibration_status);
-    SET_BDA(floppy_recalibration_status, frs | (1<<floppyid));
-    set_diskette_current_cyl(floppyid, 0);
-}
-
-static int
-floppy_media_sense(struct drive_s *drive_g)
-{
-    // for now cheat and get drive type from CMOS,
-    // assume media is same as drive type
-
-    // ** config_data **
-    // Bitfields for diskette media control:
-    // Bit(s)  Description (Table M0028)
-    //  7-6  last data rate set by controller
-    //        00=500kbps, 01=300kbps, 10=250kbps, 11=1Mbps
-    //  5-4  last diskette drive step rate selected
-    //        00=0Ch, 01=0Dh, 10=0Eh, 11=0Ah
-    //  3-2  {data rate at start of operation}
-    //  1-0  reserved
-
-    // ** media_state **
-    // Bitfields for diskette drive media state:
-    // Bit(s)  Description (Table M0030)
-    //  7-6  data rate
-    //    00=500kbps, 01=300kbps, 10=250kbps, 11=1Mbps
-    //  5  double stepping required (e.g. 360kB in 1.2MB)
-    //  4  media type established
-    //  3  drive capable of supporting 4MB media
-    //  2-0  on exit from BIOS, contains
-    //    000 trying 360kB in 360kB
-    //    001 trying 360kB in 1.2MB
-    //    010 trying 1.2MB in 1.2MB
-    //    011 360kB in 360kB established
-    //    100 360kB in 1.2MB established
-    //    101 1.2MB in 1.2MB established
-    //    110 reserved
-    //    111 all other formats/drives
-
-    u8 ftype = GET_GLOBAL(drive_g->floppy_type);
-    SET_BDA(floppy_last_data_rate, GET_GLOBAL(FloppyInfo[ftype].config_data));
-    u8 floppyid = GET_GLOBAL(drive_g->cntl_id);
-    SET_BDA(floppy_media_state[floppyid]
-            , GET_GLOBAL(FloppyInfo[ftype].media_state));
-    return DISK_RET_SUCCESS;
-}
-
-static int
-check_recal_drive(struct drive_s *drive_g)
-{
-    u8 floppyid = GET_GLOBAL(drive_g->cntl_id);
-    if ((GET_BDA(floppy_recalibration_status) & (1<<floppyid))
-        && (GET_BDA(floppy_media_state[floppyid]) & FMS_MEDIA_DRIVE_ESTABLISHED))
-        // Media is known.
-        return DISK_RET_SUCCESS;
-
-    // Recalibrate drive.
-    floppy_drive_recal(floppyid);
-
-    // Sense media.
-    return floppy_media_sense(drive_g);
 }
 
 
@@ -406,45 +529,40 @@ static int
 floppy_reset(struct disk_op_s *op)
 {
     u8 floppyid = GET_GLOBAL(op->drive_g->cntl_id);
-    set_diskette_current_cyl(floppyid, 0); // current cylinder
-    return DISK_RET_SUCCESS;
+    SET_BDA(floppy_recalibration_status, 0);
+    SET_BDA(floppy_media_state[0], 0);
+    SET_BDA(floppy_media_state[1], 0);
+    SET_BDA(floppy_track[0], 0);
+    SET_BDA(floppy_track[1], 0);
+    SET_BDA(floppy_last_data_rate, 0);
+    floppy_disable_controller();
+    return floppy_select_drive(floppyid);
 }
 
 // Read Diskette Sectors
 static int
 floppy_read(struct disk_op_s *op)
 {
-    int res = check_recal_drive(op->drive_g);
-    if (res)
-        goto fail;
-
     u8 track, sector, head;
     lba2chs(op, &track, &sector, &head);
 
     // send read-normal-data command (9 bytes) to controller
     u8 floppyid = GET_GLOBAL(op->drive_g->cntl_id);
-    u8 data[12];
-    data[0] = 0xe6; // e6: read normal data
-    data[1] = (head << 2) | floppyid; // HD DR1 DR2
-    data[2] = track;
-    data[3] = head;
-    data[4] = sector;
-    data[5] = FLOPPY_SIZE_CODE;
-    data[6] = sector + op->count - 1; // last sector to read on track
-    data[7] = FLOPPY_GAPLEN;
-    data[8] = FLOPPY_DATALEN;
+    struct floppy_pio_s pio;
+    pio.cmdlen = 9;
+    pio.data[0] = 0xe6; // e6: read normal data
+    pio.data[1] = (head << 2) | floppyid; // HD DR1 DR2
+    pio.data[2] = track;
+    pio.data[3] = head;
+    pio.data[4] = sector;
+    pio.data[5] = FLOPPY_SIZE_CODE;
+    pio.data[6] = sector + op->count - 1; // last sector to read on track
+    pio.data[7] = FLOPPY_GAPLEN;
+    pio.data[8] = FLOPPY_DATALEN;
 
-    res = floppy_cmd(op, op->count * DISK_SECTOR_SIZE, data, 9);
+    int res = floppy_cmd(op, DISK_SECTOR_SIZE, &pio);
     if (res)
         goto fail;
-
-    if (data[0] & 0xc0) {
-        res = DISK_RET_ECONTROLLER;
-        goto fail;
-    }
-
-    // ??? should track be new val from return_status[3] ?
-    set_diskette_current_cyl(floppyid, track);
     return DISK_RET_SUCCESS;
 fail:
     op->count = 0; // no sectors read
@@ -455,40 +573,26 @@ fail:
 static int
 floppy_write(struct disk_op_s *op)
 {
-    int res = check_recal_drive(op->drive_g);
-    if (res)
-        goto fail;
-
     u8 track, sector, head;
     lba2chs(op, &track, &sector, &head);
 
     // send write-normal-data command (9 bytes) to controller
     u8 floppyid = GET_GLOBAL(op->drive_g->cntl_id);
-    u8 data[12];
-    data[0] = 0xc5; // c5: write normal data
-    data[1] = (head << 2) | floppyid; // HD DR1 DR2
-    data[2] = track;
-    data[3] = head;
-    data[4] = sector;
-    data[5] = FLOPPY_SIZE_CODE;
-    data[6] = sector + op->count - 1; // last sector to write on track
-    data[7] = FLOPPY_GAPLEN;
-    data[8] = FLOPPY_DATALEN;
+    struct floppy_pio_s pio;
+    pio.cmdlen = 9;
+    pio.data[0] = 0xc5; // c5: write normal data
+    pio.data[1] = (head << 2) | floppyid; // HD DR1 DR2
+    pio.data[2] = track;
+    pio.data[3] = head;
+    pio.data[4] = sector;
+    pio.data[5] = FLOPPY_SIZE_CODE;
+    pio.data[6] = sector + op->count - 1; // last sector to write on track
+    pio.data[7] = FLOPPY_GAPLEN;
+    pio.data[8] = FLOPPY_DATALEN;
 
-    res = floppy_cmd(op, op->count * DISK_SECTOR_SIZE, data, 9);
+    int res = floppy_cmd(op, DISK_SECTOR_SIZE, &pio);
     if (res)
         goto fail;
-
-    if (data[0] & 0xc0) {
-        if (data[1] & 0x02)
-            res = DISK_RET_EWRITEPROTECT;
-        else
-            res = DISK_RET_ECONTROLLER;
-        goto fail;
-    }
-
-    // ??? should track be new val from return_status[3] ?
-    set_diskette_current_cyl(floppyid, track);
     return DISK_RET_SUCCESS;
 fail:
     op->count = 0; // no sectors read
@@ -519,34 +623,20 @@ fail:
 static int
 floppy_format(struct disk_op_s *op)
 {
-    int ret = check_recal_drive(op->drive_g);
-    if (ret)
-        return ret;
-
     u8 head = op->lba;
 
     // send format-track command (6 bytes) to controller
     u8 floppyid = GET_GLOBAL(op->drive_g->cntl_id);
-    u8 data[12];
-    data[0] = 0x4d; // 4d: format track
-    data[1] = (head << 2) | floppyid; // HD DR1 DR2
-    data[2] = FLOPPY_SIZE_CODE;
-    data[3] = op->count; // number of sectors per track
-    data[4] = FLOPPY_FORMAT_GAPLEN;
-    data[5] = FLOPPY_FILLBYTE;
+    struct floppy_pio_s pio;
+    pio.cmdlen = 6;
+    pio.data[0] = 0x4d; // 4d: format track
+    pio.data[1] = (head << 2) | floppyid; // HD DR1 DR2
+    pio.data[2] = FLOPPY_SIZE_CODE;
+    pio.data[3] = op->count; // number of sectors per track
+    pio.data[4] = FLOPPY_FORMAT_GAPLEN;
+    pio.data[5] = FLOPPY_FILLBYTE;
 
-    ret = floppy_cmd(op, op->count * 4, data, 6);
-    if (ret)
-        return ret;
-
-    if (data[0] & 0xc0) {
-        if (data[1] & 0x02)
-            return DISK_RET_EWRITEPROTECT;
-        return DISK_RET_ECONTROLLER;
-    }
-
-    set_diskette_current_cyl(floppyid, 0);
-    return DISK_RET_SUCCESS;
+    return floppy_cmd(op, 4, &pio);
 }
 
 int
@@ -585,17 +675,9 @@ handle_0e(void)
         return;
     debug_isr(DEBUG_ISR_0e);
 
-    if ((inb(PORT_FD_STATUS) & 0xc0) != 0xc0) {
-        outb(0x08, PORT_FD_DATA); // sense interrupt status
-        while ((inb(PORT_FD_STATUS) & 0xc0) != 0xc0)
-            ;
-        do {
-            inb(PORT_FD_DATA);
-        } while ((inb(PORT_FD_STATUS) & 0xc0) == 0xc0);
-    }
     // diskette interrupt has occurred
     u8 frs = GET_BDA(floppy_recalibration_status);
-    SET_BDA(floppy_recalibration_status, frs | FRS_TIMEOUT);
+    SET_BDA(floppy_recalibration_status, frs | FRS_IRQ);
 
     eoi_pic1();
 }

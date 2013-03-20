@@ -7,11 +7,12 @@
 #include "config.h" // CONFIG_*
 #include "util.h" // dprintf
 
-static struct romfile_s *RomfileRoot;
+static struct romfile_s *RomfileRoot VARVERIFY32INIT;
 
 void
 romfile_add(struct romfile_s *file)
 {
+    dprintf(3, "Add romfile: %s (size=%d)\n", file->name, file->size);
     file->next = RomfileRoot;
     RomfileRoot = file;
 }

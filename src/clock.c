@@ -62,13 +62,23 @@
 
 #define CALIBRATE_COUNT 0x800   // Approx 1.7ms
 
-u32 cpu_khz VAR16VISIBLE;
-u8 no_tsc VAR16VISIBLE;
+u32 cpu_khz VARFSEG;
+u8 no_tsc VARFSEG;
+
+u16 pmtimer_ioport VARFSEG;
+u32 pmtimer_wraps VARLOW;
+u32 pmtimer_last VARLOW;
 
 static void
 calibrate_tsc(void)
 {
     u32 eax, ebx, ecx, edx, cpuid_features = 0;
+
+    if (CONFIG_PMTIMER && GET_GLOBAL(pmtimer_ioport)) {
+        dprintf(3, "pmtimer already configured; will not calibrate TSC\n");
+        return;
+    }
+
     cpuid(0, &eax, &ebx, &ecx, &edx);
     if (eax > 0)
         cpuid(1, &eax, &ebx, &ecx, &cpuid_features);
@@ -129,11 +139,7 @@ emulate_tsc(void)
     return ret;
 }
 
-u16 pmtimer_ioport VAR16VISIBLE;
-u32 pmtimer_wraps VARLOW;
-u32 pmtimer_last VARLOW;
-
-void pmtimer_init(u16 ioport, u32 khz)
+void pmtimer_setup(u16 ioport, u32 khz)
 {
     if (!CONFIG_PMTIMER)
         return;
@@ -266,7 +272,7 @@ pit_setup(void)
 }
 
 static void
-init_rtc(void)
+rtc_setup(void)
 {
     outb_cmos(0x26, CMOS_STATUS_A);    // 32,768Khz src, 976.5625us updates
     u8 regB = inb_cmos(CMOS_STATUS_B);
@@ -281,6 +287,8 @@ bcd2bin(u8 val)
     return (val & 0xf) + ((val >> 4) * 10);
 }
 
+u8 Century VARLOW;
+
 void
 timer_setup(void)
 {
@@ -288,7 +296,7 @@ timer_setup(void)
     calibrate_tsc();
     pit_setup();
 
-    init_rtc();
+    rtc_setup();
     rtc_updating();
     u32 seconds = bcd2bin(inb_cmos(CMOS_RTC_SECONDS));
     u32 minutes = bcd2bin(inb_cmos(CMOS_RTC_MINUTES));
@@ -296,6 +304,18 @@ timer_setup(void)
     u32 ticks = (hours * 60 + minutes) * 60 + seconds;
     ticks = ((u64)ticks * PIT_TICK_RATE) / PIT_TICK_INTERVAL;
     SET_BDA(timer_counter, ticks);
+
+    // Setup Century storage
+    if (CONFIG_QEMU) {
+        Century = inb_cmos(CMOS_CENTURY);
+    } else {
+        // Infer current century from the year.
+        u8 year = inb_cmos(CMOS_RTC_YEAR);
+        if (year > 0x80)
+            Century = 0x19;
+        else
+            Century = 0x20;
+    }
 
     enable_hwirq(0, FUNC16(entry_08));
     enable_hwirq(8, FUNC16(entry_70));
@@ -393,7 +413,7 @@ handle_1a03(struct bregs *regs)
     // Bit4 in try#1 flipped in hardware (forced low) due to bit7=1
     // My assumption: RegB = ((RegB & 01100000b) | 00000010b)
     if (rtc_updating()) {
-        init_rtc();
+        rtc_setup();
         // fall through as if an update were not in progress
     }
     outb_cmos(regs->dh, CMOS_RTC_SECONDS);
@@ -420,14 +440,7 @@ handle_1a04(struct bregs *regs)
     regs->cl = inb_cmos(CMOS_RTC_YEAR);
     regs->dh = inb_cmos(CMOS_RTC_MONTH);
     regs->dl = inb_cmos(CMOS_RTC_DAY_MONTH);
-    if (CONFIG_COREBOOT) {
-        if (regs->cl > 0x80)
-            regs->ch = 0x19;
-        else
-            regs->ch = 0x20;
-    } else {
-        regs->ch = inb_cmos(CMOS_CENTURY);
-    }
+    regs->ch = GET_LOW(Century);
     regs->al = regs->ch;
     set_success(regs);
 }
@@ -447,15 +460,14 @@ handle_1a05(struct bregs *regs)
     // Bit4 in try#1 flipped in hardware (forced low) due to bit7=1
     // My assumption: RegB = (RegB & 01111111b)
     if (rtc_updating()) {
-        init_rtc();
+        rtc_setup();
         set_invalid(regs);
         return;
     }
     outb_cmos(regs->cl, CMOS_RTC_YEAR);
     outb_cmos(regs->dh, CMOS_RTC_MONTH);
     outb_cmos(regs->dl, CMOS_RTC_DAY_MONTH);
-    if (!CONFIG_COREBOOT)
-        outb_cmos(regs->ch, CMOS_CENTURY);
+    SET_LOW(Century, regs->ch);
     // clear halt-clock bit
     u8 val8 = inb_cmos(CMOS_STATUS_B) & ~RTC_B_SET;
     outb_cmos(val8, CMOS_STATUS_B);
@@ -486,7 +498,7 @@ handle_1a06(struct bregs *regs)
         return;
     }
     if (rtc_updating()) {
-        init_rtc();
+        rtc_setup();
         // fall through as if an update were not in progress
     }
     outb_cmos(regs->dh, CMOS_RTC_SECONDS_ALARM);
@@ -540,7 +552,6 @@ handle_1a(struct bregs *regs)
     case 0x05: handle_1a05(regs); break;
     case 0x06: handle_1a06(regs); break;
     case 0x07: handle_1a07(regs); break;
-    case 0xb1: handle_1ab1(regs); break;
     default:   handle_1aXX(regs); break;
     }
 }
@@ -551,8 +562,7 @@ handle_08(void)
 {
     debug_isr(DEBUG_ISR_08);
 
-    floppy_tick();
-
+    // Update counter
     u32 counter = GET_BDA(timer_counter);
     counter++;
     // compare to one days worth of timer ticks at 18.2 hz
@@ -561,9 +571,10 @@ handle_08(void)
         counter = 0;
         SET_BDA(timer_rollover, GET_BDA(timer_rollover) + 1);
     }
-
     SET_BDA(timer_counter, counter);
 
+    // Check for internal events.
+    floppy_tick();
     usb_check_event();
 
     // chain to user timer tick INT #0x1c

@@ -14,10 +14,10 @@
 #include "virtio-blk.h" // process_virtio_blk_op
 #include "blockcmd.h" // cdb_*
 
-u8 FloppyCount VAR16VISIBLE;
+u8 FloppyCount VARFSEG;
 u8 CDCount;
-struct drive_s *IDMap[3][CONFIG_MAX_EXTDRIVE] VAR16VISIBLE;
-u8 *bounce_buf_fl VAR16VISIBLE;
+struct drive_s *IDMap[3][BUILD_MAX_EXTDRIVE] VARFSEG;
+u8 *bounce_buf_fl VARFSEG;
 struct dpte_s DefaultDPTE VARLOW;
 
 struct drive_s *
@@ -40,7 +40,7 @@ int getDriveId(u8 exttype, struct drive_s *drive_g)
     return -1;
 }
 
-int bounce_buf_init(void)
+int create_bounce_buf(void)
 {
     if (bounce_buf_fl)
         return 0;
@@ -62,7 +62,7 @@ static u8
 get_translation(struct drive_s *drive_g)
 {
     u8 type = GET_GLOBAL(drive_g->type);
-    if (! CONFIG_COREBOOT && type == DTYPE_ATA) {
+    if (CONFIG_QEMU && type == DTYPE_ATA) {
         // Emulators pass in the translation info via nvram.
         u8 ataid = GET_GLOBAL(drive_g->cntl_id);
         u8 channel = ataid / 2;

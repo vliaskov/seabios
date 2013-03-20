@@ -15,11 +15,11 @@
 #include "cmos.h" // inb_cmos
 
 // Indicator if POST phase has been run.
-int HaveRunPost VAR16VISIBLE;
+int HaveRunPost VARFSEG;
 
 // Reset DMA controller
 void
-init_dma(void)
+dma_setup(void)
 {
     // first reset the DMA controllers
     outb(0, PORT_DMA1_MASTER_CLEAR);
@@ -35,12 +35,12 @@ void VISIBLE16
 handle_resume(void)
 {
     ASSERT16();
-    debug_serial_setup();
+    debug_serial_preinit();
     int status = inb_cmos(CMOS_RESET_CODE);
     outb_cmos(0, CMOS_RESET_CODE);
     dprintf(1, "In resume (status=%d)\n", status);
 
-    init_dma();
+    dma_setup();
 
     switch (status) {
     case 0x01 ... 0x04:
@@ -109,9 +109,9 @@ s3_resume(void)
     }
 
     pic_setup();
-    smm_init();
+    smm_setup();
 
-    s3_resume_vga_init();
+    s3_resume_vga();
 
     make_bios_readonly();
 
@@ -123,18 +123,26 @@ s3_resume(void)
     farcall16big(&br);
 }
 
+u8 HaveAttemptedReboot VARLOW;
+
 // Attempt to invoke a hard-reboot.
 static void
 tryReboot(void)
 {
+    if (HaveAttemptedReboot) {
+        // Hard reboot has failed - try to shutdown machine.
+        dprintf(1, "Unable to hard-reboot machine - attempting shutdown.\n");
+        apm_shutdown();
+    }
+    HaveAttemptedReboot = 1;
+
     dprintf(1, "Attempting a hard reboot\n");
 
     // Setup for reset on qemu.
-    if (! CONFIG_COREBOOT) {
-        qemu_prep_reset();
-        if (HaveRunPost)
-            apm_shutdown();
-    }
+    qemu_prep_reset();
+
+    // Reboot using ACPI RESET_REG
+    acpi_reboot();
 
     // Try keyboard controller reboot.
     i8042_reboot();

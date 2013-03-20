@@ -241,7 +241,7 @@ entry_resume:
         cli
         cld
         // Use the ExtraStack in low mem.
-        movl $_datalow_seg, %eax
+        movl $_zonelow_seg, %eax
         movw %ax, %ds
         movw %ax, %ss
         movl $ExtraStack + BUILD_EXTRA_STACK_SIZE, %esp
@@ -334,20 +334,27 @@ entry_apm32:
         popfl
         lretl
 
-// PCI-BIOS 32bit entry point
+// PCI-BIOS entry points
         DECLFUNC entry_pcibios32
 entry_pcibios32:
         pushfl
         pushl %gs               // Backup %gs and set %gs=%ds
         pushl %ds
         popl %gs
-        ENTRY_ARG_ESP _cfunc32seg_handle_pcibios32
+        ENTRY_ARG_ESP _cfunc32seg_handle_pcibios
         popl %gs
         popfl
         lretl
 
+        .code16gcc
+        DECLFUNC entry_pcibios16
+entry_pcibios16:
+        ENTRY_ARG handle_pcibios
+        iretw
+
 // BIOS32 support
-        EXPORTFUNC entry_bios32
+        .code32
+        DECLFUNC entry_bios32
 entry_bios32:
         pushfl
 #if CONFIG_PCIBIOS
@@ -384,6 +391,52 @@ entry_elf:
 
         .code16gcc
 
+// UEFI Compatibility Support Module (CSM) entry point
+        EXPORTFUNC entry_csm
+entry_csm:
+        // Backup register state
+        pushfw
+        cli
+        cld
+        pushl %eax                      // dummy
+        PUSHBREGS
+
+        // Backup stack location and convert to a "flat pointer"
+        movl %ss, %eax
+        movw %ax, BREGS_code+2(%esp)    // Store %ss in bregs->code.seg
+        shll $4, %eax
+        addl %esp, %eax
+
+        // Change to BUILD_STACK_ADDR stack
+        xorl %ebx, %ebx
+        movw %bx, %ss
+        movl $BUILD_STACK_ADDR, %esp
+
+        // Jump to 32bit mode and call handle_csm(bregs)
+        movl $_cfunc32flat_handle_csm, %edx
+        jmp transition32
+
+        DECLFUNC __csm_return
+        .code32
+__csm_return:
+        movl $1f, %edx
+        jmp transition16big
+        .code16gcc
+
+        // Switch back to original stack
+1:      movzwl BREGS_code+2(%eax), %edx
+        movl %edx, %ecx
+        shll $4, %ecx
+        subl %ecx, %eax
+        movl %edx, %ss
+        movl %eax, %esp
+
+        // Restore register state and return.
+        POPBREGS
+        addw $4, %sp                    // pop dummy
+        popfw
+        lretw
+
 
 /****************************************************************
  * Interrupt entry points
@@ -396,7 +449,7 @@ irqentry_extrastack:
         cld
         pushw %ds               // Set %ds:%eax to space on ExtraStack
         pushl %eax
-        movl $_datalow_seg, %eax
+        movl $_zonelow_seg, %eax
         movl %eax, %ds
         movl StackPos, %eax
         subl $24, %eax
@@ -427,6 +480,60 @@ irqentry_extrastack:
         popw %ds
         iretw
 
+        // Main entry point for interrupts handled on extra stack
+        DECLFUNC irqentry_arg_extrastack
+irqentry_arg_extrastack:
+        cli
+        cld
+        pushw %ds               // Set %ds:%eax to space on ExtraStack
+        pushl %eax
+        movl $_zonelow_seg, %eax
+        movl %eax, %ds
+        movl StackPos, %eax
+        subl $BREGS_size+8, %eax
+        popl BREGS_eax(%eax)    // Backup registers
+        popw BREGS_ds(%eax)
+        movl %edi, BREGS_edi(%eax)
+        movl %esi, BREGS_esi(%eax)
+        movl %ebp, BREGS_ebp(%eax)
+        movl %ebx, BREGS_ebx(%eax)
+        movl %edx, BREGS_edx(%eax)
+        movl %ecx, BREGS_ecx(%eax)
+        popl %ecx
+        movw %es, BREGS_es(%eax)
+        movl %esp, BREGS_size+0(%eax)
+        movzwl %sp, %esp
+        movw %ss, BREGS_size+4(%eax)
+        movl (%esp), %edx
+        movl %edx, BREGS_code(%eax)
+        movw 4(%esp), %dx
+        movw %dx, BREGS_flags(%eax)
+
+        movw %ds, %dx           // Setup %ss/%esp and call function
+        movw %dx, %ss
+        movl %eax, %esp
+        calll *%ecx
+
+        movl %esp, %eax         // Restore registers and return
+        movw BREGS_size+4(%eax), %ss
+        movl BREGS_size+0(%eax), %esp
+        popl %edx
+        popw %dx
+        pushw BREGS_flags(%eax)
+        pushl BREGS_code(%eax)
+        movl BREGS_edi(%eax), %edi
+        movl BREGS_esi(%eax), %esi
+        movl BREGS_ebp(%eax), %ebp
+        movl BREGS_ebx(%eax), %ebx
+        movl BREGS_edx(%eax), %edx
+        movl BREGS_ecx(%eax), %ecx
+        movw BREGS_es(%eax), %es
+        pushw BREGS_ds(%eax)
+        pushl BREGS_eax(%eax)
+        popl %eax
+        popw %ds
+        iretw
+
         // Main entry point for interrupts with args
         DECLFUNC irqentryarg
 irqentryarg:
@@ -451,7 +558,11 @@ irqentryarg:
         .global entry_\num
         entry_\num :
         pushl $ handle_\num
+#if CONFIG_ENTRY_EXTRASTACK
+        jmp irqentry_arg_extrastack
+#else
         jmp irqentryarg
+#endif
         .endm
 
         .macro DECL_IRQ_ENTRY_ARG num
@@ -554,6 +665,10 @@ entry_10_0x0f:
         // 0xfa6e - vgafont8 in font.c
 
         ORG 0xfe6e
+        .global entry_1a_official
+entry_1a_official:
+        cmpb $0xb1, %ah
+        je entry_pcibios16      // PCIBIOS calls can be in protected mode
         IRQ_ENTRY_ARG 1a
 
         ORG 0xfea5

@@ -10,7 +10,7 @@
 #include "config.h" // CONFIG_*
 #include "pci_ids.h" // PCI_VENDOR_ID_INTEL
 #include "pci_regs.h" // PCI_VENDOR_ID
-#include "xen.h" // usingXen
+#include "paravirt.h" // runningOnXen
 #include "dev-q35.h" // PCI_VENDOR_ID_INTEL
 
 // On the emulators, the bios at 0xf0000 is also at 0xffff0000
@@ -80,7 +80,7 @@ make_bios_readonly_intel(u16 bdf, u32 pam0)
     wbinvd();
 
     // Write protect roms from 0xc0000-0xf0000
-    u32 romend = rom_get_last(), romtop = rom_get_top();
+    u32 romend = rom_get_last(), romtop = rom_get_max();
     int i;
     for (i=0; i<6; i++) {
         u32 mem = BUILD_ROM_START + i * 32*1024;
@@ -97,29 +97,13 @@ make_bios_readonly_intel(u16 bdf, u32 pam0)
     pci_config_writeb(bdf, pam0, 0x10);
 }
 
-static void i440fx_bios_make_readonly(struct pci_device *pci, void *arg)
-{
-    make_bios_readonly_intel(pci->bdf, I440FX_PAM0);
-}
-
-void mch_bios_make_readonly(struct pci_device *pci, void *arg)
-{
-    make_bios_readonly_intel(pci->bdf, Q35_HOST_BRIDGE_PAM0);
-}
-
-static const struct pci_device_id dram_controller_make_readonly_tbl[] = {
-    PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_82441,
-               i440fx_bios_make_readonly),
-    PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_Q35_MCH,
-               mch_bios_make_readonly),
-    PCI_DEVICE_END
-};
+static int ShadowBDF = -1;
 
 // Make the 0xc0000-0x100000 area read/writable.
 void
 make_bios_writable(void)
 {
-    if (CONFIG_COREBOOT || usingXen())
+    if (!CONFIG_QEMU || runningOnXen())
         return;
 
     dprintf(3, "enabling shadow ram\n");
@@ -133,11 +117,13 @@ make_bios_writable(void)
         if (vendor == PCI_VENDOR_ID_INTEL
             && device == PCI_DEVICE_ID_INTEL_82441) {
             make_bios_writable_intel(bdf, I440FX_PAM0);
+            ShadowBDF = bdf;
             return;
         }
         if (vendor == PCI_VENDOR_ID_INTEL
             && device == PCI_DEVICE_ID_INTEL_Q35_MCH) {
             make_bios_writable_intel(bdf, Q35_HOST_BRIDGE_PAM0);
+            ShadowBDF = bdf;
             return;
         }
     }
@@ -148,20 +134,26 @@ make_bios_writable(void)
 void
 make_bios_readonly(void)
 {
-    if (CONFIG_COREBOOT || usingXen())
+    if (!CONFIG_QEMU || runningOnXen())
         return;
-
     dprintf(3, "locking shadow ram\n");
-    struct pci_device *pci = pci_find_init_device(
-        dram_controller_make_readonly_tbl, NULL);
-    if (!pci)
+
+    if (ShadowBDF < 0) {
         dprintf(1, "Unable to lock ram - bridge not found\n");
+        return;
+    }
+
+    u16 device = pci_config_readw(ShadowBDF, PCI_DEVICE_ID);
+    if (device == PCI_DEVICE_ID_INTEL_82441)
+        make_bios_readonly_intel(ShadowBDF, I440FX_PAM0);
+    else
+        make_bios_readonly_intel(ShadowBDF, Q35_HOST_BRIDGE_PAM0);
 }
 
 void
 qemu_prep_reset(void)
 {
-    if (CONFIG_COREBOOT)
+    if (!CONFIG_QEMU || runningOnXen())
         return;
     // QEMU doesn't map 0xc0000-0xfffff back to the original rom on a
     // reset, so do that manually before invoking a hard reset.

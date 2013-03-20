@@ -33,7 +33,7 @@ void
 pic_setup(void)
 {
     dprintf(3, "init pic\n");
-    set_pics(0x08, 0x70);
+    set_pics(BIOS_HWIRQ0_VECTOR, BIOS_HWIRQ8_VECTOR);
 }
 
 // Handler for otherwise unused hardware irqs.
@@ -49,4 +49,20 @@ handle_hwpic2(struct bregs *regs)
 {
     dprintf(DEBUG_ISR_hwpic2, "handle_hwpic2 irq=%x\n", get_pic2_isr());
     eoi_pic2();
+}
+
+u8 saved_pic_mask[2] = { ~PIC1_IRQ2, ~0 };
+
+void
+pic_save_mask(void)
+{
+    saved_pic_mask[0] = inb(PORT_PIC1_DATA);
+    saved_pic_mask[1] = inb(PORT_PIC2_DATA);
+}
+
+void
+pic_restore_mask(void)
+{
+    outb(saved_pic_mask[0], PORT_PIC1_DATA);
+    outb(saved_pic_mask[1], PORT_PIC2_DATA);
 }

@@ -12,8 +12,9 @@
 #include "pci_ids.h" // PCI_VENDOR_ID_INTEL
 #include "pci_regs.h" // PCI_INTERRUPT_LINE
 #include "ioport.h" // inl
-#include "paravirt.h" // qemu_cfg_irq0_override
-#include "dev-q35.h" // qemu_cfg_irq0_override
+#include "config.h" // CONFIG_*
+#include "paravirt.h" // RamSize
+#include "dev-q35.h"
 
 /****************************************************/
 /* ACPI tables init */
@@ -150,17 +151,6 @@ struct madt_local_nmi {
 
 
 /*
- * ACPI 2.0 Generic Address Space definition.
- */
-struct acpi_20_generic_address {
-    u8  address_space_id;
-    u8  register_bit_width;
-    u8  register_bit_offset;
-    u8  reserved;
-    u64 address;
-} PACKED;
-
-/*
  * HPET Description Table
  */
 struct acpi_20_hpet {
@@ -220,11 +210,11 @@ build_header(struct acpi_table_header *h, u32 sig, int len, u8 rev)
     h->signature = sig;
     h->length = cpu_to_le32(len);
     h->revision = rev;
-    memcpy(h->oem_id, CONFIG_APPNAME6, 6);
-    memcpy(h->oem_table_id, CONFIG_APPNAME4, 4);
+    memcpy(h->oem_id, BUILD_APPNAME6, 6);
+    memcpy(h->oem_table_id, BUILD_APPNAME4, 4);
     memcpy(h->oem_table_id + 4, (void*)&sig, 4);
     h->oem_revision = cpu_to_le32(1);
-    memcpy(h->asl_compiler_id, CONFIG_APPNAME4, 4);
+    memcpy(h->asl_compiler_id, BUILD_APPNAME4, 4);
     h->asl_compiler_revision = cpu_to_le32(1);
     h->checksum -= checksum(h, len);
 }
@@ -236,7 +226,7 @@ build_header(struct acpi_table_header *h, u32 sig, int len, u8 rev)
 
 #define PIIX4_PM_INTRRUPT       9       // irq 9
 
-static void piix4_fadt_init(struct pci_device *pci, void *arg)
+static void piix4_fadt_setup(struct pci_device *pci, void *arg)
 {
     struct fadt_descriptor_rev1 *fadt = arg;
 
@@ -262,7 +252,7 @@ static void piix4_fadt_init(struct pci_device *pci, void *arg)
 }
 
 /* PCI_VENDOR_ID_INTEL && PCI_DEVICE_ID_INTEL_ICH9_LPC */
-void ich9_lpc_fadt_init(struct pci_device *dev, void *arg)
+void ich9_lpc_fadt_setup(struct pci_device *dev, void *arg)
 {
     struct fadt_descriptor_rev1 *fadt = arg;
 
@@ -290,9 +280,9 @@ void ich9_lpc_fadt_init(struct pci_device *dev, void *arg)
 static const struct pci_device_id fadt_init_tbl[] = {
     /* PIIX4 Power Management device (for ACPI) */
     PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_82371AB_3,
-               piix4_fadt_init),
+               piix4_fadt_setup),
     PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_ICH9_LPC,
-               ich9_lpc_fadt_init),
+               ich9_lpc_fadt_setup),
     PCI_DEVICE_END
 };
 
@@ -325,7 +315,7 @@ build_fadt(struct pci_device *pci)
     /* FADT */
     memset(fadt, 0, sizeof(*fadt));
     fadt->firmware_ctrl = cpu_to_le32((u32)facs);
-    fadt->dsdt = 0;  /* dsdt will be filled later in acpi_bios_init()
+    fadt->dsdt = 0;  /* dsdt will be filled later in acpi_setup()
                         by fill_dsdt() */
     pci_init_device(fadt_init_tbl, pci, fadt);
 
@@ -372,7 +362,7 @@ build_madt(void)
     io_apic->interrupt = cpu_to_le32(0);
 
     struct madt_intsrcovr *intsrcovr = (void*)&io_apic[1];
-    if (qemu_cfg_irq0_override()) {
+    if (romfile_loadint("etc/irq0-override", 0)) {
         memset(intsrcovr, 0, sizeof(*intsrcovr));
         intsrcovr->type   = APIC_XRUPT_OVERRIDE;
         intsrcovr->length = sizeof(*intsrcovr);
@@ -449,7 +439,7 @@ encodeLen(u8 *ssdt_ptr, int length, int bytes)
 #define SSDT_SIGNATURE 0x54445353 // SSDT
 #define SSDT_HEADER_LENGTH 36
 
-#include "ssdt-susp.hex"
+#include "ssdt-misc.hex"
 #include "ssdt-pcihp.hex"
 
 #define PCI_RMV_BASE 0xae0c
@@ -506,12 +496,11 @@ static void*
 build_ssdt(void)
 {
     int acpi_cpus = MaxCountCPUs > 0xff ? 0xff : MaxCountCPUs;
-    int length = (sizeof(ssdp_susp_aml)                     // _S3_ / _S4_ / _S5_
+    int length = (sizeof(ssdp_misc_aml)                     // _S3_ / _S4_ / _S5_
                   + (1+3+4)                                 // Scope(_SB_)
                   + (acpi_cpus * PROC_SIZEOF)               // procs
                   + (1+2+5+(12*acpi_cpus))                  // NTFY
                   + (6+2+1+(1*acpi_cpus))                   // CPON
-                  + 17                                      // BDAT
                   + (1+3+4)                                 // Scope(PCI0)
                   + ((PCI_SLOTS - 1) * PCIHP_SIZEOF)        // slots
                   + (1+2+5+(12*(PCI_SLOTS - 1))));          // PCNT
@@ -528,14 +517,27 @@ build_ssdt(void)
     if (!sys_states || sys_state_size != 6)
         sys_states = (char[]){128, 0, 0, 129, 128, 128};
 
-    memcpy(ssdt_ptr, ssdp_susp_aml, sizeof(ssdp_susp_aml));
+    memcpy(ssdt_ptr, ssdp_misc_aml, sizeof(ssdp_misc_aml));
     if (!(sys_states[3] & 128))
         ssdt_ptr[acpi_s3_name[0]] = 'X';
     if (!(sys_states[4] & 128))
         ssdt_ptr[acpi_s4_name[0]] = 'X';
     else
         ssdt_ptr[acpi_s4_pkg[0] + 1] = ssdt[acpi_s4_pkg[0] + 3] = sys_states[4] & 127;
-    ssdt_ptr += sizeof(ssdp_susp_aml);
+
+    // store pci io windows
+    *(u32*)&ssdt_ptr[acpi_pci32_start[0]] = pcimem_start;
+    *(u32*)&ssdt_ptr[acpi_pci32_end[0]] = pcimem_end - 1;
+    if (pcimem64_start) {
+        ssdt_ptr[acpi_pci64_valid[0]] = 1;
+        *(u64*)&ssdt_ptr[acpi_pci64_start[0]] = pcimem64_start;
+        *(u64*)&ssdt_ptr[acpi_pci64_end[0]] = pcimem64_end - 1;
+        *(u64*)&ssdt_ptr[acpi_pci64_length[0]] = pcimem64_end - pcimem64_start;
+    } else {
+        ssdt_ptr[acpi_pci64_valid[0]] = 0;
+    }
+
+    ssdt_ptr += sizeof(ssdp_misc_aml);
 
     // build Scope(_SB_) header
     *(ssdt_ptr++) = 0x10; // ScopeOp
@@ -571,31 +573,6 @@ build_ssdt(void)
     *(ssdt_ptr++) = acpi_cpus;
     for (i=0; i<acpi_cpus; i++)
         *(ssdt_ptr++) = (apic_id_is_present(i)) ? 0x01 : 0x00;
-
-    // store pci io windows: start, end, length
-    // this way we don't have to do the math in the dsdt
-    struct bfld *bfld = malloc_high(sizeof(struct bfld));
-    bfld->p0s = pcimem_start;
-    bfld->p0e = pcimem_end - 1;
-    bfld->p0l = pcimem_end - pcimem_start;
-    bfld->p1s = pcimem64_start;
-    bfld->p1e = pcimem64_end - 1;
-    bfld->p1l = pcimem64_end - pcimem64_start;
-
-    // build "OperationRegion(BDAT, SystemMemory, 0x12345678, 0x87654321)"
-    *(ssdt_ptr++) = 0x5B; // ExtOpPrefix
-    *(ssdt_ptr++) = 0x80; // OpRegionOp
-    *(ssdt_ptr++) = 'B';
-    *(ssdt_ptr++) = 'D';
-    *(ssdt_ptr++) = 'A';
-    *(ssdt_ptr++) = 'T';
-    *(ssdt_ptr++) = 0x00; // SystemMemory
-    *(ssdt_ptr++) = 0x0C; // DWordPrefix
-    *(u32*)ssdt_ptr = (u32)bfld;
-    ssdt_ptr += 4;
-    *(ssdt_ptr++) = 0x0C; // DWordPrefix
-    *(u32*)ssdt_ptr = sizeof(struct bfld);
-    ssdt_ptr += 4;
 
     // build Scope(PCI0) opcode
     *(ssdt_ptr++) = 0x10; // ScopeOp
@@ -672,22 +649,18 @@ acpi_build_srat_memory(struct srat_memory_affinity *numamem,
 static void *
 build_srat(void)
 {
-    int nb_numa_nodes = qemu_cfg_get_numa_nodes();
-
-    if (nb_numa_nodes == 0)
+    int filesize;
+    u64 *numadata = romfile_loadfile("etc/numa-nodes", &filesize);
+    if (!numadata)
         return NULL;
-
-    u64 *numadata = malloc_tmphigh(sizeof(u64) * (MaxCountCPUs + nb_numa_nodes));
-    if (!numadata) {
-        warn_noalloc();
+    int max_cpu = romfile_loadint("etc/max-cpus", 0);
+    int nb_numa_nodes = (filesize / sizeof(u64)) - max_cpu;
+    if (!nb_numa_nodes)
         return NULL;
-    }
-
-    qemu_cfg_get_numa_data(numadata, MaxCountCPUs + nb_numa_nodes);
 
     struct system_resource_affinity_table *srat;
     int srat_size = sizeof(*srat) +
-        sizeof(struct srat_processor_affinity) * MaxCountCPUs +
+        sizeof(struct srat_processor_affinity) * max_cpu +
         sizeof(struct srat_memory_affinity) * (nb_numa_nodes + 2);
 
     srat = malloc_high(srat_size);
@@ -703,7 +676,7 @@ build_srat(void)
     int i;
     u64 curnode;
 
-    for (i = 0; i < MaxCountCPUs; ++i) {
+    for (i = 0; i < max_cpu; ++i) {
         core->type = SRAT_PROCESSOR;
         core->length = sizeof(*core);
         core->local_apic_id = i;
@@ -796,7 +769,7 @@ struct rsdp_descriptor *RsdpAddr;
 
 #define MAX_ACPI_TABLES 20
 void
-acpi_bios_init(void)
+acpi_setup(void)
 {
     if (! CONFIG_ACPI)
         return;
@@ -828,23 +801,25 @@ acpi_bios_init(void)
     if (pci->device == PCI_DEVICE_ID_INTEL_ICH9_LPC)
         ACPI_INIT_TABLE(build_mcfg_q35());
 
-    u16 i, external_tables = qemu_cfg_acpi_additional_tables();
-
-    for (i = 0; i < external_tables; i++) {
-        u16 len = qemu_cfg_next_acpi_table_len();
-        void *addr = malloc_high(len);
-        if (!addr) {
+    struct romfile_s *file = NULL;
+    for (;;) {
+        file = romfile_findprefix("acpi/", file);
+        if (!file)
+            break;
+        struct acpi_table_header *table = malloc_high(file->size);
+        if (!table) {
             warn_noalloc();
             continue;
         }
-        struct acpi_table_header *header =
-            qemu_cfg_next_acpi_table_load(addr, len);
-        if (header->signature == DSDT_SIGNATURE) {
+        int ret = file->copy(file, table, file->size);
+        if (ret <= sizeof(*table))
+            continue;
+        if (table->signature == DSDT_SIGNATURE) {
             if (fadt) {
-                fill_dsdt(fadt, addr);
+                fill_dsdt(fadt, table);
             }
         } else {
-            ACPI_INIT_TABLE(header);
+            ACPI_INIT_TABLE(table);
         }
         if (tbl_idx == MAX_ACPI_TABLES) {
             warn_noalloc();
@@ -882,23 +857,23 @@ acpi_bios_init(void)
     }
     memset(rsdp, 0, sizeof(*rsdp));
     rsdp->signature = RSDP_SIGNATURE;
-    memcpy(rsdp->oem_id, CONFIG_APPNAME6, 6);
+    memcpy(rsdp->oem_id, BUILD_APPNAME6, 6);
     rsdp->rsdt_physical_address = cpu_to_le32((u32)rsdt);
     rsdp->checksum -= checksum(rsdp, 20);
     RsdpAddr = rsdp;
     dprintf(1, "ACPI tables: RSDP=%p RSDT=%p\n", rsdp, rsdt);
 }
 
-u32
-find_resume_vector(void)
+static struct fadt_descriptor_rev1 *
+find_fadt(void)
 {
     dprintf(4, "rsdp=%p\n", RsdpAddr);
     if (!RsdpAddr || RsdpAddr->signature != RSDP_SIGNATURE)
-        return 0;
+        return NULL;
     struct rsdt_descriptor_rev1 *rsdt = (void*)RsdpAddr->rsdt_physical_address;
     dprintf(4, "rsdt=%p\n", rsdt);
     if (!rsdt || rsdt->signature != RSDT_SIGNATURE)
-        return 0;
+        return NULL;
     void *end = (void*)rsdt + rsdt->length;
     int i;
     for (i=0; (void*)&rsdt->table_offset_entry[i] < end; i++) {
@@ -906,13 +881,82 @@ find_resume_vector(void)
         if (!fadt || fadt->signature != FACP_SIGNATURE)
             continue;
         dprintf(4, "fadt=%p\n", fadt);
-        struct facs_descriptor_rev1 *facs = (void*)fadt->firmware_ctrl;
-        dprintf(4, "facs=%p\n", facs);
-        if (! facs || facs->signature != FACS_SIGNATURE)
-            return 0;
-        // Found it.
-        dprintf(4, "resume addr=%d\n", facs->firmware_waking_vector);
-        return facs->firmware_waking_vector;
+        return fadt;
     }
-    return 0;
+    dprintf(4, "no fadt found\n");
+    return NULL;
+}
+
+u32
+find_resume_vector(void)
+{
+    struct fadt_descriptor_rev1 *fadt = find_fadt();
+    if (!fadt)
+        return 0;
+    struct facs_descriptor_rev1 *facs = (void*)fadt->firmware_ctrl;
+    dprintf(4, "facs=%p\n", facs);
+    if (! facs || facs->signature != FACS_SIGNATURE)
+        return 0;
+    // Found it.
+    dprintf(4, "resume addr=%d\n", facs->firmware_waking_vector);
+    return facs->firmware_waking_vector;
+}
+
+void
+find_acpi_features(void)
+{
+    struct fadt_descriptor_rev1 *fadt = find_fadt();
+    if (!fadt)
+        return;
+    u32 pm_tmr = le32_to_cpu(fadt->pm_tmr_blk);
+    dprintf(4, "pm_tmr_blk=%x\n", pm_tmr);
+    if (pm_tmr)
+        pmtimer_setup(pm_tmr, 3579);
+
+    // Theoretically we should check the 'reset_reg_sup' flag, but Windows
+    // doesn't and thus nobody seems to *set* it. If the table is large enough
+    // to include it, let the sanity checks in acpi_set_reset_reg() suffice.
+    if (fadt->length >= 129) {
+        void *p = fadt;
+        acpi_set_reset_reg(p + 116, *(u8 *)(p + 128));
+    }
+}
+
+static struct acpi_20_generic_address acpi_reset_reg;
+static u8 acpi_reset_val;
+
+void
+acpi_reboot(void)
+{
+    // Check it passed the sanity checks in acpi_set_reset_reg() and was set
+    if (acpi_reset_reg.register_bit_width != 8)
+        return;
+
+    u64 addr = le64_to_cpu(acpi_reset_reg.address);
+
+    dprintf(1, "ACPI hard reset %d:%llx (%x)\n",
+            acpi_reset_reg.address_space_id, addr, acpi_reset_val);
+
+    switch (acpi_reset_reg.address_space_id) {
+    case 0: // System Memory
+	writeb((void *)(u32)addr, acpi_reset_val);
+        break;
+    case 1: // System I/O
+        outb(acpi_reset_val, addr);
+        break;
+    case 2: // PCI config space
+        pci_config_writeb(acpi_ga_to_bdf(addr), addr & 0xffff, acpi_reset_val);
+        break;
+    }
+}
+
+void
+acpi_set_reset_reg(struct acpi_20_generic_address *reg, u8 val)
+{
+    if (!reg || reg->address_space_id > 2 ||
+        reg->register_bit_width != 8 || reg->register_bit_offset)
+        return;
+
+    acpi_reset_reg = *reg;
+    acpi_reset_val = val;
 }

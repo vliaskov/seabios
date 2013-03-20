@@ -101,7 +101,7 @@ scsi_is_ready(struct disk_op_s *op)
 
 // Validate drive, find block size / sector count, and register drive.
 int
-scsi_init_drive(struct drive_s *drive, const char *s, int prio)
+scsi_drive_setup(struct drive_s *drive, const char *s, int prio)
 {
     struct disk_op_s dop;
     memset(&dop, 0, sizeof(dop));
@@ -165,7 +165,7 @@ scsi_init_drive(struct drive_s *drive, const char *s, int prio)
     // but some old USB keys only support a very small subset of SCSI which
     // does not even include the MODE SENSE command!
     //
-    if (! CONFIG_COREBOOT && memcmp(vendor, "QEMU", 5) == 0) {
+    if (CONFIG_QEMU_HARDWARE && memcmp(vendor, "QEMU", 5) == 0) {
         struct cdbres_mode_sense_geom geomdata;
         ret = cdb_mode_sense_geom(&dop, &geomdata);
         if (ret == 0) {

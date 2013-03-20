@@ -8,7 +8,6 @@
 #include "util.h" // dprintf
 #include "config.h" // CONFIG_*
 #include "cmos.h" // CMOS_BIOS_SMP_COUNT
-#include "paravirt.h"
 
 #define APIC_ICR_LOW ((u8*)BUILD_APIC_ADDR + 0x300)
 #define APIC_SVR     ((u8*)BUILD_APIC_ADDR + 0x0F0)
@@ -17,8 +16,8 @@
 
 #define APIC_ENABLED 0x0100
 
-struct { u32 ecx, eax, edx; } smp_mtrr[32] VAR16VISIBLE;
-u32 smp_mtrr_count VAR16VISIBLE;
+struct { u32 ecx, eax, edx; } smp_mtrr[32] VARFSEG;
+u32 smp_mtrr_count VARFSEG;
 
 void
 wrmsr_smp(u32 index, u64 val)
@@ -34,10 +33,10 @@ wrmsr_smp(u32 index, u64 val)
     smp_mtrr_count++;
 }
 
-u32 CountCPUs VAR16VISIBLE;
-u32 MaxCountCPUs VAR16VISIBLE;
+u32 CountCPUs VARFSEG;
+u32 MaxCountCPUs VARFSEG;
 // 256 bits for the found APIC IDs
-u32 FoundAPICIDs[256/32] VAR16VISIBLE;
+u32 FoundAPICIDs[256/32] VARFSEG;
 extern void smp_ap_boot_code(void);
 ASM16(
     "  .global smp_ap_boot_code\n"
@@ -82,8 +81,11 @@ int apic_id_is_present(u8 apic_id)
 
 // find and initialize the CPUs by launching a SIPI to them
 void
-smp_probe(void)
+smp_setup(void)
 {
+    if (!CONFIG_QEMU)
+        return;
+
     ASSERT32FLAT();
     u32 eax, ebx, ecx, cpuid_features;
     cpuid(1, &eax, &ebx, &ecx, &cpuid_features);
@@ -113,13 +115,11 @@ smp_probe(void)
     u32 val = readl(APIC_SVR);
     writel(APIC_SVR, val | APIC_ENABLED);
 
-    if (! CONFIG_COREBOOT) {
-        /* Set LINT0 as Ext_INT, level triggered */
-        writel(APIC_LINT0, 0x8700);
+    /* Set LINT0 as Ext_INT, level triggered */
+    writel(APIC_LINT0, 0x8700);
 
-        /* Set LINT1 as NMI, level triggered */
-        writel(APIC_LINT1, 0x8400);
-    }
+    /* Set LINT1 as NMI, level triggered */
+    writel(APIC_LINT1, 0x8400);
 
     // broadcast SIPI
     barrier();
@@ -128,18 +128,14 @@ smp_probe(void)
     writel(APIC_ICR_LOW, 0x000C4600 | sipi_vector);
 
     // Wait for other CPUs to process the SIPI.
-    if (CONFIG_COREBOOT) {
-        msleep(10);
-    } else {
-        u8 cmos_smp_count = inb_cmos(CMOS_BIOS_SMP_COUNT);
-        while (cmos_smp_count + 1 != readl(&CountCPUs))
-            yield();
-    }
+    u8 cmos_smp_count = inb_cmos(CMOS_BIOS_SMP_COUNT);
+    while (cmos_smp_count + 1 != readl(&CountCPUs))
+        yield();
 
     // Restore memory.
     *(u64*)BUILD_AP_BOOT_ADDR = old;
 
-    MaxCountCPUs = qemu_cfg_get_max_cpus();
+    MaxCountCPUs = romfile_loadint("etc/max-cpus", 0);
     if (!MaxCountCPUs || MaxCountCPUs < CountCPUs)
         MaxCountCPUs = CountCPUs;
 

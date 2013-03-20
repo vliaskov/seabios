@@ -5,7 +5,7 @@
 //
 // This file may be distributed under the terms of the GNU LGPLv3 license.
 
-#include "clext.h" // clext_init
+#include "clext.h" // clext_setup
 #include "vgabios.h" // VBE_VENDOR_STRING
 #include "biosvar.h" // GET_GLOBAL
 #include "util.h" // dprintf
@@ -433,6 +433,7 @@ cirrus_switch_mode(struct cirrus_mode_s *table)
     else if (memmodel != MM_TEXT)
         on = 0x01;
     stdvga_attr_mask(0x10, 0x01, on);
+    stdvga_attrindex_write(0x20);
 }
 
 static void
@@ -442,14 +443,14 @@ cirrus_enable_16k_granularity(void)
 }
 
 static void
-cirrus_clear_vram(void)
+cirrus_clear_vram(u16 fill)
 {
     cirrus_enable_16k_granularity();
-    u8 count = GET_GLOBAL(VBE_total_memory) / (16 * 1024);
-    u8 i;
+    int count = GET_GLOBAL(VBE_total_memory) / (16 * 1024);
+    int i;
     for (i=0; i<count; i++) {
         stdvga_grdc_write(0x09, i);
-        memset16_far(SEG_GRAPH, 0, 0, 16 * 1024);
+        memset16_far(SEG_GRAPH, 0, fill, 16 * 1024);
     }
     stdvga_grdc_write(0x09, 0x00);
 }
@@ -468,7 +469,8 @@ clext_set_mode(struct vgamode_s *vmode_g, int flags)
     if (!(flags & MF_LINEARFB))
         cirrus_enable_16k_granularity();
     if (!(flags & MF_NOCLEARMEM))
-        cirrus_clear_vram();
+        // fill with 0xff to keep win 2K happy
+        cirrus_clear_vram(flags & MF_LEGACY ? 0xffff : 0x0000);
     return 0;
 }
 
@@ -603,9 +605,9 @@ cirrus_get_memsize(void)
 }
 
 int
-clext_init(void)
+clext_setup(void)
 {
-    int ret = stdvga_init();
+    int ret = stdvga_setup();
     if (ret)
         return ret;
 

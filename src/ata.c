@@ -1006,9 +1006,9 @@ static const struct pci_device_id pci_ata_tbl[] = {
 
 // Locate and init ata controllers.
 static void
-ata_init(void)
+ata_scan(void)
 {
-    if (!CONFIG_COREBOOT && !PCIDevices) {
+    if (CONFIG_QEMU && !PCIDevices) {
         // No PCI devices found - probably a QEMU "-M isapc" machine.
         // Try using ISA ports for ATA controllers.
         init_controller(NULL, IRQ_ATA1
@@ -1035,7 +1035,7 @@ ata_setup(void)
     dprintf(3, "init hard drives\n");
 
     SpinupEnd = calc_future_tsc(IDE_TIMEOUT);
-    ata_init();
+    ata_scan();
 
     SET_BDA(disk_control_byte, 0xc0);
 

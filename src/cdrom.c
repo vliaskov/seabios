@@ -13,7 +13,7 @@
 #include "blockcmd.h" // CDB_CMD_REQUEST_SENSE
 
 // Locks for removable devices
-u8 CDRom_locks[CONFIG_MAX_EXTDRIVE] VARLOW;
+u8 CDRom_locks[BUILD_MAX_EXTDRIVE] VARLOW;
 
 
 /****************************************************************
@@ -21,7 +21,7 @@ u8 CDRom_locks[CONFIG_MAX_EXTDRIVE] VARLOW;
  ****************************************************************/
 
 struct cdemu_s CDEmu VARLOW;
-struct drive_s *cdemu_drive_gf VAR16VISIBLE;
+struct drive_s *cdemu_drive_gf VARFSEG;
 
 static int
 cdemu_read(struct disk_op_s *op)
@@ -107,13 +107,13 @@ process_cdemu_op(struct disk_op_s *op)
 }
 
 void
-cdemu_setup(void)
+cdrom_prepboot(void)
 {
     if (!CONFIG_CDROM_EMU)
         return;
     if (!CDCount)
         return;
-    if (bounce_buf_init() < 0)
+    if (create_bounce_buf() < 0)
         return;
 
     struct drive_s *drive_g = malloc_fseg(sizeof(*drive_g));

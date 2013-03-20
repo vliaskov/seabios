@@ -29,9 +29,11 @@ struct zone_s {
     struct allocinfo_s *info;
 };
 
-struct zone_s ZoneLow, ZoneHigh, ZoneFSeg, ZoneTmpLow, ZoneTmpHigh;
+struct zone_s ZoneLow VARVERIFY32INIT, ZoneHigh VARVERIFY32INIT;
+struct zone_s ZoneFSeg VARVERIFY32INIT;
+struct zone_s ZoneTmpLow VARVERIFY32INIT, ZoneTmpHigh VARVERIFY32INIT;
 
-static struct zone_s *Zones[] = {
+static struct zone_s *Zones[] VARVERIFY32INIT = {
     &ZoneTmpLow, &ZoneLow, &ZoneFSeg, &ZoneTmpHigh, &ZoneHigh
 };
 
@@ -170,15 +172,15 @@ static struct allocinfo_s *RomBase;
 
 #define OPROM_HEADER_RESERVE 16
 
-// Return the memory position up to which roms may be located.
+// Return the maximum memory position option roms may use.
 u32
-rom_get_top(void)
+rom_get_max(void)
 {
     return ALIGN_DOWN((u32)RomBase->allocend - OPROM_HEADER_RESERVE
                       , OPTION_ROM_ALIGN);
 }
 
-// Return the end of the last deployed rom.
+// Return the end of the last deployed option rom.
 u32
 rom_get_last(void)
 {
@@ -192,8 +194,8 @@ rom_reserve(u32 size)
     u32 newend = ALIGN(RomEnd + size, OPTION_ROM_ALIGN) + OPROM_HEADER_RESERVE;
     if (newend > (u32)RomBase->allocend)
         return NULL;
-    if (newend < (u32)datalow_base + OPROM_HEADER_RESERVE)
-        newend = (u32)datalow_base + OPROM_HEADER_RESERVE;
+    if (newend < (u32)zonelow_base + OPROM_HEADER_RESERVE)
+        newend = (u32)zonelow_base + OPROM_HEADER_RESERVE;
     RomBase->data = RomBase->dataend = (void*)newend;
     return (void*)RomEnd;
 }
@@ -217,10 +219,16 @@ rom_confirm(u32 size)
  ****************************************************************/
 
 void
-malloc_setup(void)
+malloc_preinit(void)
 {
     ASSERT32FLAT();
-    dprintf(3, "malloc setup\n");
+    dprintf(3, "malloc preinit\n");
+
+    // Don't declare any memory between 0xa0000 and 0x100000
+    add_e820(BUILD_LOWRAM_END, BUILD_BIOS_ADDR-BUILD_LOWRAM_END, E820_HOLE);
+
+    // Mark known areas as reserved.
+    add_e820(BUILD_BIOS_ADDR, BUILD_BIOS_SIZE, E820_RESERVED);
 
     // Populate temp high ram
     u32 highram = 0;
@@ -234,7 +242,7 @@ malloc_setup(void)
             continue;
         u32 s = en->start, e = end;
         if (!highram) {
-            u32 newe = ALIGN_DOWN(e - CONFIG_MAX_HIGHTABLE, MALLOC_MIN_ALIGN);
+            u32 newe = ALIGN_DOWN(e - BUILD_MAX_HIGHTABLE, MALLOC_MIN_ALIGN);
             if (newe <= e && newe >= s) {
                 highram = newe;
                 e = newe;
@@ -243,61 +251,100 @@ malloc_setup(void)
         addSpace(&ZoneTmpHigh, (void*)s, (void*)e);
     }
 
-    // Populate other regions
+    // Populate regions
     addSpace(&ZoneTmpLow, (void*)BUILD_STACK_ADDR, (void*)BUILD_EBDA_MINIMUM);
-    addSpace(&ZoneFSeg, BiosTableSpace, &BiosTableSpace[CONFIG_MAX_BIOSTABLE]);
-    extern u8 final_datalow_start[];
-    addSpace(&ZoneLow, datalow_base + OPROM_HEADER_RESERVE, final_datalow_start);
-    RomBase = findLast(&ZoneLow);
     if (highram) {
         addSpace(&ZoneHigh, (void*)highram
-                 , (void*)highram + CONFIG_MAX_HIGHTABLE);
-        add_e820(highram, CONFIG_MAX_HIGHTABLE, E820_RESERVED);
+                 , (void*)highram + BUILD_MAX_HIGHTABLE);
+        add_e820(highram, BUILD_MAX_HIGHTABLE, E820_RESERVED);
     }
+}
+
+void
+csm_malloc_preinit(u32 low_pmm, u32 low_pmm_size, u32 hi_pmm, u32 hi_pmm_size)
+{
+    ASSERT32FLAT();
+
+    if (hi_pmm_size > BUILD_MAX_HIGHTABLE) {
+        void *hi_pmm_end = (void *)hi_pmm + hi_pmm_size;
+        addSpace(&ZoneTmpHigh, (void *)hi_pmm, hi_pmm_end - BUILD_MAX_HIGHTABLE);
+        addSpace(&ZoneHigh, hi_pmm_end - BUILD_MAX_HIGHTABLE, hi_pmm_end);
+    } else {
+        addSpace(&ZoneTmpHigh, (void *)hi_pmm, (void *)hi_pmm + hi_pmm_size);
+    }
+    addSpace(&ZoneTmpLow, (void *)low_pmm, (void *)low_pmm + low_pmm_size);
+}
+
+u32 LegacyRamSize VARFSEG;
+
+// Calculate the maximum ramsize (less than 4gig) from e820 map.
+static void
+calcRamSize(void)
+{
+    u32 rs = 0;
+    int i;
+    for (i=e820_count-1; i>=0; i--) {
+        struct e820entry *en = &e820_list[i];
+        u64 end = en->start + en->size;
+        u32 type = en->type;
+        if (end <= 0xffffffff && (type == E820_ACPI || type == E820_RAM)) {
+            rs = end;
+            break;
+        }
+    }
+    LegacyRamSize = rs >= 1024*1024 ? rs : 1024*1024;
 }
 
 // Update pointers after code relocation.
 void
-malloc_fixupreloc(void)
+malloc_init(void)
 {
     ASSERT32FLAT();
-    if (!CONFIG_RELOCATE_INIT)
-        return;
-    dprintf(3, "malloc fixup reloc\n");
+    dprintf(3, "malloc init\n");
 
-    int i;
-    for (i=0; i<ARRAY_SIZE(Zones); i++) {
-        struct zone_s *zone = Zones[i];
-        if (zone->info)
-            zone->info->pprev = &zone->info;
+    if (CONFIG_RELOCATE_INIT) {
+        // Fixup malloc pointers after relocation
+        int i;
+        for (i=0; i<ARRAY_SIZE(Zones); i++) {
+            struct zone_s *zone = Zones[i];
+            if (zone->info)
+                zone->info->pprev = &zone->info;
+        }
     }
 
-    // Add space free'd during relocation in f-segment to ZoneFSeg
-    extern u8 code32init_end[];
-    if ((u32)code32init_end > BUILD_BIOS_ADDR) {
-        memset((void*)BUILD_BIOS_ADDR, 0, (u32)code32init_end - BUILD_BIOS_ADDR);
-        addSpace(&ZoneFSeg, (void*)BUILD_BIOS_ADDR, code32init_end);
-    }
+    // Initialize low-memory region
+    extern u8 varlow_start[], varlow_end[], final_varlow_start[];
+    memmove(final_varlow_start, varlow_start, varlow_end - varlow_start);
+    addSpace(&ZoneLow, zonelow_base + OPROM_HEADER_RESERVE, final_varlow_start);
+    RomBase = findLast(&ZoneLow);
+
+    // Add space available in f-segment to ZoneFSeg
+    extern u8 zonefseg_start[], zonefseg_end[];
+    memset(zonefseg_start, 0, zonefseg_end - zonefseg_start);
+    addSpace(&ZoneFSeg, zonefseg_start, zonefseg_end);
+
+    calcRamSize();
 }
 
 void
-malloc_finalize(void)
+malloc_prepboot(void)
 {
     ASSERT32FLAT();
     dprintf(3, "malloc finalize\n");
 
     // Place an optionrom signature around used low mem area.
-    u32 base = rom_get_top();
+    u32 base = rom_get_max();
     struct rom_header *dummyrom = (void*)base;
     dummyrom->signature = OPTION_ROM_SIGNATURE;
     int size = (BUILD_BIOS_ADDR - base) / 512;
     dummyrom->size = (size > 255) ? 255 : size;
     memset((void*)RomEnd, 0, base-RomEnd);
-    dprintf(1, "Space available for UMB: %08x-%08x\n", RomEnd, base);
 
     // Clear unused f-seg ram.
     struct allocinfo_s *info = findLast(&ZoneFSeg);
     memset(info->dataend, 0, info->allocend - info->dataend);
+    dprintf(1, "Space available for UMB: %x-%x, %x-%x\n"
+            , RomEnd, base, (u32)info->dataend, (u32)info->allocend);
 
     // Give back unused high ram.
     info = findLast(&ZoneHigh);
@@ -306,6 +353,8 @@ malloc_finalize(void)
         add_e820((u32)info->dataend, giveback, E820_RAM);
         dprintf(1, "Returned %d bytes of ZoneHigh\n", giveback);
     }
+
+    calcRamSize();
 }
 
 
@@ -416,8 +465,7 @@ struct pmmheader {
     u8 version;
     u8 length;
     u8 checksum;
-    u16 entry_offset;
-    u16 entry_seg;
+    struct segoff_s entry;
     u8 reserved[5];
 } PACKED;
 
@@ -426,10 +474,10 @@ extern struct pmmheader PMMHEADER;
 #define PMM_SIGNATURE 0x4d4d5024 // $PMM
 
 #if CONFIG_PMM
-struct pmmheader PMMHEADER __aligned(16) VAR16EXPORT = {
+struct pmmheader PMMHEADER __aligned(16) VARFSEG = {
+    .signature = PMM_SIGNATURE,
     .version = 0x01,
     .length = sizeof(PMMHEADER),
-    .entry_seg = SEG_BIOS,
 };
 #endif
 
@@ -545,24 +593,20 @@ handle_pmm(u16 *args)
     return ret;
 }
 
-// romlayout.S
-extern void entry_pmm(void);
-
 void
-pmm_setup(void)
+pmm_init(void)
 {
     if (! CONFIG_PMM)
         return;
 
     dprintf(3, "init PMM\n");
 
-    PMMHEADER.signature = PMM_SIGNATURE;
-    PMMHEADER.entry_offset = (u32)entry_pmm - BUILD_BIOS_ADDR;
+    PMMHEADER.entry = FUNC16(entry_pmm);
     PMMHEADER.checksum -= checksum(&PMMHEADER, sizeof(PMMHEADER));
 }
 
 void
-pmm_finalize(void)
+pmm_prepboot(void)
 {
     if (! CONFIG_PMM)
         return;
@@ -570,5 +614,5 @@ pmm_finalize(void)
     dprintf(3, "finalize PMM\n");
 
     PMMHEADER.signature = 0;
-    PMMHEADER.entry_offset = 0;
+    PMMHEADER.entry.segoff = 0;
 }

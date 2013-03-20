@@ -17,7 +17,7 @@
 #include "pci_ids.h" // PCI_DEVICE_ID_XXX
 #include "pci_regs.h" // PCI_VENDOR_ID
 #include "boot.h" // bootprio_find_scsi_device
-#include "blockcmd.h" // scsi_init_drive
+#include "blockcmd.h" // scsi_drive_setup
 #include "disk.h"
 
 #define MFI_DB 0x0 // Doorbell
@@ -223,7 +223,7 @@ megasas_add_lun(struct pci_device *pci, u32 iobase, u8 target, u8 lun)
                     pci_bdf_to_bus(pci->bdf), pci_bdf_to_dev(pci->bdf),
                     pci_bdf_to_fn(pci->bdf), target, lun);
     prio = bootprio_find_scsi_device(pci, target, lun);
-    ret = scsi_init_drive(&mlun->drive, name, prio);
+    ret = scsi_drive_setup(&mlun->drive, name, prio);
     free(name);
     if (ret) {
         free(mlun->frame);
@@ -382,18 +382,17 @@ megasas_setup(void)
         if (pci->vendor != PCI_VENDOR_ID_LSI_LOGIC &&
             pci->vendor != PCI_VENDOR_ID_DELL)
             continue;
-        if (pci->device != PCI_DEVICE_ID_LSI_SAS1064R ||
-            pci->device != PCI_DEVICE_ID_LSI_SAS1078 ||
-            pci->device != PCI_DEVICE_ID_LSI_SAS1078DE ||
-            pci->device != PCI_DEVICE_ID_LSI_SAS2108 ||
-            pci->device != PCI_DEVICE_ID_LSI_SAS2108E ||
-            pci->device != PCI_DEVICE_ID_LSI_SAS2004 ||
-            pci->device != PCI_DEVICE_ID_LSI_SAS2008 ||
-            pci->device != PCI_DEVICE_ID_LSI_VERDE_ZCR ||
-            pci->device != PCI_DEVICE_ID_DELL_PERC5 ||
-            pci->device != PCI_DEVICE_ID_LSI_SAS2208 ||
-            pci->device != PCI_DEVICE_ID_LSI_SAS3108)
-            continue;
-        init_megasas(pci);
+        if (pci->device == PCI_DEVICE_ID_LSI_SAS1064R ||
+            pci->device == PCI_DEVICE_ID_LSI_SAS1078 ||
+            pci->device == PCI_DEVICE_ID_LSI_SAS1078DE ||
+            pci->device == PCI_DEVICE_ID_LSI_SAS2108 ||
+            pci->device == PCI_DEVICE_ID_LSI_SAS2108E ||
+            pci->device == PCI_DEVICE_ID_LSI_SAS2004 ||
+            pci->device == PCI_DEVICE_ID_LSI_SAS2008 ||
+            pci->device == PCI_DEVICE_ID_LSI_VERDE_ZCR ||
+            pci->device == PCI_DEVICE_ID_DELL_PERC5 ||
+            pci->device == PCI_DEVICE_ID_LSI_SAS2208 ||
+            pci->device == PCI_DEVICE_ID_LSI_SAS3108)
+            init_megasas(pci);
     }
 }

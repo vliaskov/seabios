@@ -10,13 +10,6 @@
 #include "util.h" // debug_enter
 #include "pic.h" // enable_hwirq
 
-// Amount of continuous ram under 4Gig
-u32 RamSize VAR16VISIBLE;
-// Amount of continuous ram >4Gig
-u64 RamSizeOver4G;
-// Space for bios tables built an run-time.
-char BiosTableSpace[CONFIG_MAX_BIOSTABLE] __aligned(MALLOC_MIN_ALIGN) VAR16VISIBLE;
-
 
 /****************************************************************
  * Misc 16bit ISRs
@@ -113,9 +106,9 @@ handle_75(void)
 
 struct bios_config_table_s BIOS_CONFIG_TABLE VAR16FIXED(0xe6f5) = {
     .size     = sizeof(BIOS_CONFIG_TABLE) - 2,
-    .model    = CONFIG_MODEL_ID,
-    .submodel = CONFIG_SUBMODEL_ID,
-    .biosrev  = CONFIG_BIOS_REVISION,
+    .model    = BUILD_MODEL_ID,
+    .submodel = BUILD_SUBMODEL_ID,
+    .biosrev  = BUILD_BIOS_REVISION,
     .feature1 = (
         CBT_F1_2NDPIC | CBT_F1_RTC | CBT_F1_EBDA
         | (CONFIG_KBD_CALL_INT15_4F ? CBT_F1_INT154F : 0)),
@@ -131,23 +124,23 @@ struct bios_config_table_s BIOS_CONFIG_TABLE VAR16FIXED(0xe6f5) = {
  ****************************************************************/
 
 // Real mode IDT descriptor
-struct descloc_s rmode_IDT_info VAR16VISIBLE = {
+struct descloc_s rmode_IDT_info VARFSEG = {
     .length = sizeof(struct rmode_IVT) - 1,
     .addr = (u32)MAKE_FLATPTR(SEG_IVT, 0),
 };
 
 // Dummy IDT that forces a machine shutdown if an irq happens in
 // protected mode.
-u8 dummy_IDT VAR16VISIBLE;
+u8 dummy_IDT VARFSEG;
 
 // Protected mode IDT descriptor
-struct descloc_s pmode_IDT_info VAR16VISIBLE = {
+struct descloc_s pmode_IDT_info VARFSEG = {
     .length = sizeof(dummy_IDT) - 1,
-    .addr = (u32)MAKE_FLATPTR(SEG_BIOS, &dummy_IDT),
+    .addr = (u32)&dummy_IDT,
 };
 
 // GDT
-u64 rombios32_gdt[] VAR16VISIBLE __aligned(8) = {
+u64 rombios32_gdt[] VARFSEG __aligned(8) = {
     // First entry can't be used.
     0x0000000000000000LL,
     // 32 bit flat code segment (SEG32_MODE32_CS)
@@ -165,9 +158,9 @@ u64 rombios32_gdt[] VAR16VISIBLE __aligned(8) = {
 };
 
 // GDT descriptor
-struct descloc_s rombios32_gdt_48 VAR16VISIBLE = {
+struct descloc_s rombios32_gdt_48 VARFSEG = {
     .length = sizeof(rombios32_gdt) - 1,
-    .addr = (u32)MAKE_FLATPTR(SEG_BIOS, rombios32_gdt),
+    .addr = (u32)rombios32_gdt,
 };
 
 
@@ -181,7 +174,7 @@ char BiosCopyright[] VAR16FIXED(0xff00) =
 // BIOS build date
 char BiosDate[] VAR16FIXED(0xfff5) = "06/23/99";
 
-u8 BiosModelId VAR16FIXED(0xfffe) = CONFIG_MODEL_ID;
+u8 BiosModelId VAR16FIXED(0xfffe) = BUILD_MODEL_ID;
 
 u8 BiosChecksum VAR16FIXED(0xffff);
 

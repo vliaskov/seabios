@@ -6,7 +6,7 @@
 // This file may be distributed under the terms of the GNU LGPLv3 license.
 
 #include "vgabios.h" // struct vgamode_s
-#include "stdvga.h" // stdvga_init
+#include "stdvga.h" // stdvga_setup
 #include "ioport.h" // outb
 #include "farptr.h" // SET_FARVAR
 #include "biosvar.h" // GET_GLOBAL
@@ -123,6 +123,7 @@ stdvga_perform_gray_scale_summing(u16 start, u16 count)
         u16 intensity = ((77 * rgb[0] + 151 * rgb[1] + 28 * rgb[2]) + 0x80) >> 8;
         if (intensity > 0x3f)
             intensity = 0x3f;
+        rgb[0] = rgb[1] = rgb[2] = intensity;
 
         stdvga_dac_write(GET_SEG(SS), rgb, i, 1);
     }
@@ -490,7 +491,7 @@ stdvga_enable_video_addressing(u8 disable)
 }
 
 int
-stdvga_init(void)
+stdvga_setup(void)
 {
     // switch to color mode and enable CPU access 480 lines
     stdvga_misc_write(0xc3);
