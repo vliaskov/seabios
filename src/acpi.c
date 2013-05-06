@@ -782,7 +782,7 @@ acpi_build_srat_memory(struct srat_memory_affinity *numamem,
     numamem->length = sizeof(*numamem);
     memset(numamem->proximity, 0 ,4);
     numamem->proximity[0] = node;
-    numamem->flags = cpu_to_le32(!!enabled);
+    numamem->flags = cpu_to_le32(!!enabled) | cpu_to_le32(0x2);
     numamem->base_addr_low = base & 0xFFFFFFFF;
     numamem->base_addr_high = base >> 32;
     numamem->length_low = len & 0xFFFFFFFF;
