@@ -166,13 +166,20 @@ qemu_cfg_read_entry(void *buf, int e, int len)
     qemu_cfg_read(buf, len);
 }
 
+struct qemu_romfile_s {
+    struct romfile_s file;
+    int select, skip;
+};
+
 static int
 qemu_cfg_read_file(struct romfile_s *file, void *dst, u32 maxlen)
 {
     if (file->size > maxlen)
         return -1;
-    qemu_cfg_select(file->id);
-    qemu_cfg_skip(file->rawsize);
+    struct qemu_romfile_s *qfile;
+    qfile = container_of(file, struct qemu_romfile_s, file);
+    qemu_cfg_select(qfile->select);
+    qemu_cfg_skip(qfile->skip);
     qemu_cfg_read(dst, file->size);
     return file->size;
 }
@@ -180,18 +187,18 @@ qemu_cfg_read_file(struct romfile_s *file, void *dst, u32 maxlen)
 static void
 qemu_romfile_add(char *name, int select, int skip, int size)
 {
-    struct romfile_s *file = malloc_tmp(sizeof(*file));
-    if (!file) {
+    struct qemu_romfile_s *qfile = malloc_tmp(sizeof(*qfile));
+    if (!qfile) {
         warn_noalloc();
         return;
     }
-    memset(file, 0, sizeof(*file));
-    strtcpy(file->name, name, sizeof(file->name));
-    file->id = select;
-    file->rawsize = skip; // Use rawsize to indicate skip length.
-    file->size = size;
-    file->copy = qemu_cfg_read_file;
-    romfile_add(file);
+    memset(qfile, 0, sizeof(*qfile));
+    strtcpy(qfile->file.name, name, sizeof(qfile->file.name));
+    qfile->file.size = size;
+    qfile->select = select;
+    qfile->skip = skip;
+    qfile->file.copy = qemu_cfg_read_file;
+    romfile_add(&qfile->file);
 }
 
 struct e820_reservation {
@@ -223,8 +230,11 @@ qemu_cfg_legacy(void)
     // NUMA data
     u64 numacount;
     qemu_cfg_read_entry(&numacount, QEMU_CFG_NUMA, sizeof(numacount));
-    numacount += romfile_loadint("etc/max-cpus", 0);
-    qemu_romfile_add("etc/numa-nodes", QEMU_CFG_NUMA, sizeof(numacount)
+    int max_cpu = romfile_loadint("etc/max-cpus", 0);
+    qemu_romfile_add("etc/numa-cpu-map", QEMU_CFG_NUMA, sizeof(numacount)
+                     , max_cpu*sizeof(u64));
+    qemu_romfile_add("etc/numa-nodes", QEMU_CFG_NUMA
+                     , sizeof(numacount) + max_cpu*sizeof(u64)
                      , numacount*sizeof(u64));
 
     // e820 data

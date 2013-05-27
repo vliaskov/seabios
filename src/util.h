@@ -344,6 +344,7 @@ void vgahook_setup(struct pci_device *pci);
 
 // optionroms.c
 void call_bcv(u16 seg, u16 ip);
+int is_pci_vga(struct pci_device *pci);
 void optionrom_setup(void);
 void vgarom_setup(void);
 void s3_resume_vga(void);
@@ -435,11 +436,6 @@ struct romfile_s {
     char name[128];
     u32 size;
     int (*copy)(struct romfile_s *file, void *dest, u32 maxlen);
-
-    u32 id;
-    u32 rawsize;
-    u32 flags;
-    void *data;
 };
 void romfile_add(struct romfile_s *file);
 struct romfile_s *romfile_findprefix(const char *prefix, struct romfile_s *prev);

@@ -16,198 +16,12 @@
 #include "paravirt.h" // RamSize
 #include "dev-q35.h"
 
-/****************************************************/
-/* ACPI tables init */
-
-/* Table structure from Linux kernel (the ACPI tables are under the
-   BSD license) */
-
-struct acpi_table_header         /* ACPI common table header */
-{
-    ACPI_TABLE_HEADER_DEF
-} PACKED;
-
-/*
- * ACPI 1.0 Root System Description Table (RSDT)
- */
-#define RSDT_SIGNATURE 0x54445352 // RSDT
-struct rsdt_descriptor_rev1
-{
-    ACPI_TABLE_HEADER_DEF       /* ACPI common table header */
-    u32 table_offset_entry[0];  /* Array of pointers to other */
-    /* ACPI tables */
-} PACKED;
-
-/*
- * ACPI 1.0 Firmware ACPI Control Structure (FACS)
- */
-#define FACS_SIGNATURE 0x53434146 // FACS
-struct facs_descriptor_rev1
-{
-    u32 signature;           /* ACPI Signature */
-    u32 length;                 /* Length of structure, in bytes */
-    u32 hardware_signature;     /* Hardware configuration signature */
-    u32 firmware_waking_vector; /* ACPI OS waking vector */
-    u32 global_lock;            /* Global Lock */
-    u32 S4bios_f        : 1;    /* Indicates if S4BIOS support is present */
-    u32 reserved1       : 31;   /* Must be 0 */
-    u8  resverved3 [40];        /* Reserved - must be zero */
-} PACKED;
-
-
-/*
- * Differentiated System Description Table (DSDT)
- */
-#define DSDT_SIGNATURE 0x54445344 // DSDT
-
-/*
- * MADT values and structures
- */
-
-/* Values for MADT PCATCompat */
-
-#define DUAL_PIC                0
-#define MULTIPLE_APIC           1
-
-
-/* Master MADT */
-
-#define APIC_SIGNATURE 0x43495041 // APIC
-struct multiple_apic_table
-{
-    ACPI_TABLE_HEADER_DEF     /* ACPI common table header */
-    u32 local_apic_address;     /* Physical address of local APIC */
-#if 0
-    u32 PCATcompat      : 1;    /* A one indicates system also has dual 8259s */
-    u32 reserved1       : 31;
-#else
-    u32 flags;
-#endif
-} PACKED;
-
-
-/* Values for Type in APIC sub-headers */
-
-#define APIC_PROCESSOR          0
-#define APIC_IO                 1
-#define APIC_XRUPT_OVERRIDE     2
-#define APIC_NMI                3
-#define APIC_LOCAL_NMI          4
-#define APIC_ADDRESS_OVERRIDE   5
-#define APIC_IO_SAPIC           6
-#define APIC_LOCAL_SAPIC        7
-#define APIC_XRUPT_SOURCE       8
-#define APIC_RESERVED           9           /* 9 and greater are reserved */
-
-/*
- * MADT sub-structures (Follow MULTIPLE_APIC_DESCRIPTION_TABLE)
- */
-#define ACPI_SUB_HEADER_DEF   /* Common ACPI sub-structure header */\
-    u8  type;                               \
-    u8  length;
-
-/* Sub-structures for MADT */
-
-struct madt_processor_apic
-{
-    ACPI_SUB_HEADER_DEF
-    u8  processor_id;           /* ACPI processor id */
-    u8  local_apic_id;          /* Processor's local APIC id */
-#if 0
-    u32 processor_enabled: 1;   /* Processor is usable if set */
-    u32 reserved2       : 31;   /* Reserved, must be zero */
-#else
-    u32 flags;
-#endif
-} PACKED;
-
-struct madt_io_apic
-{
-    ACPI_SUB_HEADER_DEF
-    u8  io_apic_id;             /* I/O APIC ID */
-    u8  reserved;               /* Reserved - must be zero */
-    u32 address;                /* APIC physical address */
-    u32 interrupt;              /* Global system interrupt where INTI
-                                 * lines start */
-} PACKED;
-
-/* IRQs 5,9,10,11 */
-#define PCI_ISA_IRQ_MASK    0x0e20
-
-struct madt_intsrcovr {
-    ACPI_SUB_HEADER_DEF
-    u8  bus;
-    u8  source;
-    u32 gsi;
-    u16 flags;
-} PACKED;
-
-struct madt_local_nmi {
-    ACPI_SUB_HEADER_DEF
-    u8  processor_id;           /* ACPI processor id */
-    u16 flags;                  /* MPS INTI flags */
-    u8  lint;                   /* Local APIC LINT# */
-} PACKED;
-
-
-/*
- * HPET Description Table
- */
-struct acpi_20_hpet {
-    ACPI_TABLE_HEADER_DEF                    /* ACPI common table header */
-    u32           timer_block_id;
-    struct acpi_20_generic_address addr;
-    u8            hpet_number;
-    u16           min_tick;
-    u8            page_protect;
-} PACKED;
-
-#define HPET_ID         0x000
-#define HPET_PERIOD     0x004
-
-/*
- * SRAT (NUMA topology description) table
- */
-
-#define SRAT_PROCESSOR          0
-#define SRAT_MEMORY             1
-
-struct system_resource_affinity_table
-{
-    ACPI_TABLE_HEADER_DEF
-    u32    reserved1;
-    u32    reserved2[2];
-} PACKED;
-
-struct srat_processor_affinity
-{
-    ACPI_SUB_HEADER_DEF
-    u8     proximity_lo;
-    u8     local_apic_id;
-    u32    flags;
-    u8     local_sapic_eid;
-    u8     proximity_hi[3];
-    u32    reserved;
-} PACKED;
-
-struct srat_memory_affinity
-{
-    ACPI_SUB_HEADER_DEF
-    u8     proximity[4];
-    u16    reserved1;
-    u32    base_addr_low,base_addr_high;
-    u32    length_low,length_high;
-    u32    reserved2;
-    u32    flags;
-    u32    reserved3[2];
-} PACKED;
-
 #include "acpi-dsdt.hex"
 
 static void
 build_header(struct acpi_table_header *h, u32 sig, int len, u8 rev)
 {
-    h->signature = sig;
+    h->signature = cpu_to_le32(sig);
     h->length = cpu_to_le32(len);
     h->revision = rev;
     memcpy(h->oem_id, BUILD_APPNAME6, 6);
@@ -309,7 +123,7 @@ build_fadt(struct pci_device *pci)
 
     /* FACS */
     memset(facs, 0, sizeof(*facs));
-    facs->signature = FACS_SIGNATURE;
+    facs->signature = cpu_to_le32(FACS_SIGNATURE);
     facs->length = cpu_to_le32(sizeof(*facs));
 
     /* FADT */
@@ -367,20 +181,20 @@ build_madt(void)
         intsrcovr->type   = APIC_XRUPT_OVERRIDE;
         intsrcovr->length = sizeof(*intsrcovr);
         intsrcovr->source = 0;
-        intsrcovr->gsi    = 2;
-        intsrcovr->flags  = 0; /* conforms to bus specifications */
+        intsrcovr->gsi    = cpu_to_le32(2);
+        intsrcovr->flags  = cpu_to_le16(0); /* conforms to bus specifications */
         intsrcovr++;
     }
     for (i = 1; i < 16; i++) {
-        if (!(PCI_ISA_IRQ_MASK & (1 << i)))
+        if (!(BUILD_PCI_IRQS & (1 << i)))
             /* No need for a INT source override structure. */
             continue;
         memset(intsrcovr, 0, sizeof(*intsrcovr));
         intsrcovr->type   = APIC_XRUPT_OVERRIDE;
         intsrcovr->length = sizeof(*intsrcovr);
         intsrcovr->source = i;
-        intsrcovr->gsi    = i;
-        intsrcovr->flags  = 0xd; /* active high, level triggered */
+        intsrcovr->gsi    = cpu_to_le32(i);
+        intsrcovr->flags  = cpu_to_le16(0xd); /* active high, level triggered */
         intsrcovr++;
     }
 
@@ -388,7 +202,7 @@ build_madt(void)
     local_nmi->type         = APIC_LOCAL_NMI;
     local_nmi->length       = sizeof(*local_nmi);
     local_nmi->processor_id = 0xff; /* all processors */
-    local_nmi->flags        = 0;
+    local_nmi->flags        = cpu_to_le16(0);
     local_nmi->lint         = 1; /* LINT1 */
     local_nmi++;
 
@@ -526,16 +340,20 @@ build_ssdt(void)
         ssdt_ptr[acpi_s4_pkg[0] + 1] = ssdt[acpi_s4_pkg[0] + 3] = sys_states[4] & 127;
 
     // store pci io windows
-    *(u32*)&ssdt_ptr[acpi_pci32_start[0]] = pcimem_start;
-    *(u32*)&ssdt_ptr[acpi_pci32_end[0]] = pcimem_end - 1;
+    *(u32*)&ssdt_ptr[acpi_pci32_start[0]] = cpu_to_le32(pcimem_start);
+    *(u32*)&ssdt_ptr[acpi_pci32_end[0]] = cpu_to_le32(pcimem_end - 1);
     if (pcimem64_start) {
         ssdt_ptr[acpi_pci64_valid[0]] = 1;
-        *(u64*)&ssdt_ptr[acpi_pci64_start[0]] = pcimem64_start;
-        *(u64*)&ssdt_ptr[acpi_pci64_end[0]] = pcimem64_end - 1;
-        *(u64*)&ssdt_ptr[acpi_pci64_length[0]] = pcimem64_end - pcimem64_start;
+        *(u64*)&ssdt_ptr[acpi_pci64_start[0]] = cpu_to_le64(pcimem64_start);
+        *(u64*)&ssdt_ptr[acpi_pci64_end[0]] = cpu_to_le64(pcimem64_end - 1);
+        *(u64*)&ssdt_ptr[acpi_pci64_length[0]] = cpu_to_le64(
+            pcimem64_end - pcimem64_start);
     } else {
         ssdt_ptr[acpi_pci64_valid[0]] = 0;
     }
+
+    int pvpanic_port = romfile_loadint("etc/pvpanic-port", 0x0);
+    *(u16 *)(ssdt_ptr + *ssdt_isa_pest) = pvpanic_port;
 
     ssdt_ptr += sizeof(ssdp_misc_aml);
 
@@ -600,7 +418,9 @@ build_ssdt(void)
     return ssdt;
 }
 
-#define HPET_SIGNATURE 0x54455048 // HPET
+#define HPET_ID         0x000
+#define HPET_PERIOD     0x004
+
 static void*
 build_hpet(void)
 {
@@ -624,7 +444,7 @@ build_hpet(void)
      * emulated hpet
      */
     hpet->timer_block_id = cpu_to_le32(0x8086a201);
-    hpet->addr.address = cpu_to_le32(BUILD_HPET_ADDRESS);
+    hpet->addr.address = cpu_to_le64(BUILD_HPET_ADDRESS);
     build_header((void*)hpet, HPET_SIGNATURE, sizeof(*hpet), 1);
 
     return hpet;
@@ -636,27 +456,23 @@ acpi_build_srat_memory(struct srat_memory_affinity *numamem,
 {
     numamem->type = SRAT_MEMORY;
     numamem->length = sizeof(*numamem);
-    memset(numamem->proximity, 0 ,4);
+    memset(numamem->proximity, 0, 4);
     numamem->proximity[0] = node;
     numamem->flags = cpu_to_le32(!!enabled);
-    numamem->base_addr_low = base & 0xFFFFFFFF;
-    numamem->base_addr_high = base >> 32;
-    numamem->length_low = len & 0xFFFFFFFF;
-    numamem->length_high = len >> 32;
+    numamem->base_addr = cpu_to_le64(base);
+    numamem->range_length = cpu_to_le64(len);
 }
 
-#define SRAT_SIGNATURE 0x54415253 // SRAT
 static void *
 build_srat(void)
 {
-    int filesize;
-    u64 *numadata = romfile_loadfile("etc/numa-nodes", &filesize);
-    if (!numadata)
-        return NULL;
-    int max_cpu = romfile_loadint("etc/max-cpus", 0);
-    int nb_numa_nodes = (filesize / sizeof(u64)) - max_cpu;
-    if (!nb_numa_nodes)
-        return NULL;
+    int numadatasize, numacpusize;
+    u64 *numadata = romfile_loadfile("etc/numa-nodes", &numadatasize);
+    u64 *numacpumap = romfile_loadfile("etc/numa-cpu-map", &numacpusize);
+    if (!numadata || !numacpumap)
+        goto fail;
+    int max_cpu = numacpusize / sizeof(u64);
+    int nb_numa_nodes = numadatasize / sizeof(u64);
 
     struct system_resource_affinity_table *srat;
     int srat_size = sizeof(*srat) +
@@ -666,12 +482,11 @@ build_srat(void)
     srat = malloc_high(srat_size);
     if (!srat) {
         warn_noalloc();
-        free(numadata);
-        return NULL;
+        goto fail;
     }
 
     memset(srat, 0, srat_size);
-    srat->reserved1=1;
+    srat->reserved1=cpu_to_le32(1);
     struct srat_processor_affinity *core = (void*)(srat + 1);
     int i;
     u64 curnode;
@@ -680,7 +495,7 @@ build_srat(void)
         core->type = SRAT_PROCESSOR;
         core->length = sizeof(*core);
         core->local_apic_id = i;
-        curnode = *numadata++;
+        curnode = *numacpumap++;
         core->proximity_lo = curnode;
         memset(core->proximity_hi, 0, 3);
         core->local_sapic_eid = 0;
@@ -734,7 +549,12 @@ build_srat(void)
     build_header((void*)srat, SRAT_SIGNATURE, srat_size, 1);
 
     free(numadata);
+    free(numacpumap);
     return srat;
+fail:
+    free(numadata);
+    free(numacpumap);
+    return NULL;
 }
 
 static void *
@@ -749,8 +569,8 @@ build_mcfg_q35(void)
         return NULL;
     }
     memset(mcfg, 0, len);
-    mcfg->allocation[0].address = Q35_HOST_BRIDGE_PCIEXBAR_ADDR;
-    mcfg->allocation[0].pci_segment = Q35_HOST_PCIE_PCI_SEGMENT;
+    mcfg->allocation[0].address = cpu_to_le64(Q35_HOST_BRIDGE_PCIEXBAR_ADDR);
+    mcfg->allocation[0].pci_segment = cpu_to_le16(Q35_HOST_PCIE_PCI_SEGMENT);
     mcfg->allocation[0].start_bus_number = Q35_HOST_PCIE_START_BUS_NUMBER;
     mcfg->allocation[0].end_bus_number = Q35_HOST_PCIE_END_BUS_NUMBER;
 
@@ -787,8 +607,8 @@ acpi_setup(void)
 
 #define ACPI_INIT_TABLE(X)                                   \
     do {                                                     \
-        tables[tbl_idx] = (u32)(X);                          \
-        if (tables[tbl_idx])                                 \
+        tables[tbl_idx] = cpu_to_le32((u32)(X));             \
+        if (le32_to_cpu(tables[tbl_idx]))                    \
             tbl_idx++;                                       \
     } while(0)
 
@@ -826,7 +646,8 @@ acpi_setup(void)
             break;
         }
     }
-    if (fadt && !fadt->dsdt) {
+
+    if (CONFIG_ACPI_DSDT && fadt && !fadt->dsdt) {
         /* default DSDT */
         void *dsdt = malloc_high(sizeof(AmlCode));
         if (!dsdt) {
@@ -856,7 +677,7 @@ acpi_setup(void)
         return;
     }
     memset(rsdp, 0, sizeof(*rsdp));
-    rsdp->signature = RSDP_SIGNATURE;
+    rsdp->signature = cpu_to_le64(RSDP_SIGNATURE);
     memcpy(rsdp->oem_id, BUILD_APPNAME6, 6);
     rsdp->rsdt_physical_address = cpu_to_le32((u32)rsdt);
     rsdp->checksum -= checksum(rsdp, 20);

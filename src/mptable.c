@@ -65,30 +65,25 @@ mptable_setup(void)
     }
     int entrycount = cpu - cpus;
 
-    // PCI buses
+    // PCI bus
     struct mpt_bus *buses = (void*)cpu, *bus = buses;
-    int lastbus = -1;
-    struct pci_device *pci;
-    foreachpci(pci) {
-        int curbus = pci_bdf_to_bus(pci->bdf);
-        if (curbus == lastbus)
-            continue;
-        lastbus = curbus;
+    if (PCIDevices) {
         memset(bus, 0, sizeof(*bus));
         bus->type = MPT_TYPE_BUS;
-        bus->busid = curbus;
+        bus->busid = 0;
         memcpy(bus->bustype, "PCI   ", sizeof(bus->bustype));
         bus++;
+        entrycount++;
     }
 
     /* isa bus */
-    int isabusid;
+    int isabusid = bus - buses;
     memset(bus, 0, sizeof(*bus));
     bus->type = MPT_TYPE_BUS;
-    isabusid = bus->busid = lastbus + 1;
+    bus->busid = isabusid;
     memcpy(bus->bustype, "ISA   ", sizeof(bus->bustype));
     bus++;
-    entrycount += bus - buses;
+    entrycount++;
 
     /* ioapic */
     u8 ioapic_id = BUILD_IOAPIC_ID;
@@ -104,10 +99,13 @@ mptable_setup(void)
     /* irqs */
     struct mpt_intsrc *intsrcs = (void*)&ioapic[1], *intsrc = intsrcs;
     int dev = -1;
-    unsigned short mask = 0, pinmask = 0;
+    unsigned short pinmask = 0;
 
+    struct pci_device *pci;
     foreachpci(pci) {
         u16 bdf = pci->bdf;
+        if (pci_bdf_to_bus(bdf) != 0)
+            break;
         int pin = pci_config_readb(bdf, PCI_INTERRUPT_PIN);
         int irq = pci_config_readb(bdf, PCI_INTERRUPT_LINE);
         if (pin == 0)
@@ -119,7 +117,6 @@ mptable_setup(void)
         if (pinmask & (1 << pin)) /* pin was seen already */
             continue;
         pinmask |= (1 << pin);
-        mask |= (1 << irq);
         memset(intsrc, 0, sizeof(*intsrc));
         intsrc->type = MPT_TYPE_INTSRC;
         intsrc->irqtype = 0; /* INT */
@@ -131,9 +128,10 @@ mptable_setup(void)
         intsrc++;
     }
 
+    int irq0_override = romfile_loadint("etc/irq0-override", 0);
     for (i = 0; i < 16; i++) {
         memset(intsrc, 0, sizeof(*intsrc));
-        if (mask & (1 << i))
+        if (BUILD_PCI_IRQS & (1 << i))
             continue;
         intsrc->type = MPT_TYPE_INTSRC;
         intsrc->irqtype = 0; /* INT */
@@ -142,7 +140,7 @@ mptable_setup(void)
         intsrc->srcbusirq = i;
         intsrc->dstapic = ioapic_id;
         intsrc->dstirq = i;
-        if (romfile_loadint("etc/irq0-override", 0)) {
+        if (irq0_override) {
             /* Destination 2 is covered by irq0->inti2 override (i ==
                0). Source IRQ 2 is unused */
             if (i == 0)
