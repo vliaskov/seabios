@@ -28,5 +28,6 @@ void qemu_preinit(void);
 void qemu_platform_setup(void);
 void qemu_cfg_init(void);
 void *qemu_cfg_dimms_postinit(int skip, int *numadimmsize);
+void qemu_cfg_get_pci_offsets(u64 *pcimem_start, u64 *pcimem64_start);
 
 #endif

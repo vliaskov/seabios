@@ -134,6 +134,7 @@ qemu_platform_setup(void)
 #define QEMU_CFG_BOOT_MENU              0x0e
 #define QEMU_CFG_MAX_CPUS               0x0f
 #define QEMU_CFG_FILE_DIR               0x19
+#define QEMU_CFG_PCI_WINDOW             0x1a
 #define QEMU_CFG_ARCH_LOCAL             0x8000
 #define QEMU_CFG_ACPI_TABLES            (QEMU_CFG_ARCH_LOCAL + 0)
 #define QEMU_CFG_SMBIOS_ENTRIES         (QEMU_CFG_ARCH_LOCAL + 1)
@@ -342,4 +343,10 @@ qemu_cfg_dimms_postinit(int skip, int *numadimmsize)
 
     numadimmsmap = romfile_loadfile("etc/numa-dimm-map", numadimmsize);
     return numadimmsmap;
+}
+
+void qemu_cfg_get_pci_offsets(u64 *pcimem_start, u64 *pcimem64_start)
+{
+    qemu_cfg_read_entry(pcimem_start, QEMU_CFG_PCI_WINDOW, sizeof(u64));
+    qemu_cfg_read((u8*)(pcimem64_start), sizeof(u64));
 }
