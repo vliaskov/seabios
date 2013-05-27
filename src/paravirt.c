@@ -232,11 +232,12 @@ qemu_cfg_legacy(void)
     qemu_cfg_read_entry(&numacount, QEMU_CFG_NUMA, sizeof(numacount));
     int max_cpu = romfile_loadint("etc/max-cpus", 0);
     qemu_romfile_add("etc/numa-cpu-map", QEMU_CFG_NUMA, sizeof(numacount)
-                     , max_cpu*sizeof(u64));
-    qemu_romfile_add("etc/numa-nodes", QEMU_CFG_NUMA
-                     , sizeof(numacount) + max_cpu*sizeof(u64)
-                     , numacount*sizeof(u64));
-
+                , max_cpu*sizeof(u64));
+    if (numacount) {
+        qemu_romfile_add("etc/numa-nodes", QEMU_CFG_NUMA
+                , sizeof(numacount) + max_cpu*sizeof(u64)
+                , numacount*sizeof(u64));
+    }
     // e820 data
     u32 count32;
     qemu_cfg_read_entry(&count32, QEMU_CFG_E820_TABLE, sizeof(count32));
@@ -327,4 +328,18 @@ void qemu_cfg_init(void)
         qemu_romfile_add(qfile.name, be16_to_cpu(qfile.select)
                          , 0, be32_to_cpu(qfile.size));
     }
+}
+
+void *
+qemu_cfg_dimms_postinit(int skip, int *numadimmsize)
+{
+    u64 hpdimmscount;
+    u64 *numadimmsmap;
+    qemu_cfg_read(&hpdimmscount, sizeof(hpdimmscount));
+    qemu_romfile_add("etc/numa-dimm-map", QEMU_CFG_NUMA
+             , skip
+             , 3 * hpdimmscount*sizeof(u64));
+
+    numadimmsmap = romfile_loadfile("etc/numa-dimm-map", numadimmsize);
+    return numadimmsmap;
 }

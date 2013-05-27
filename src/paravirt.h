@@ -27,5 +27,6 @@ static inline int runningOnKVM(void) {
 void qemu_preinit(void);
 void qemu_platform_setup(void);
 void qemu_cfg_init(void);
+void *qemu_cfg_dimms_postinit(int skip, int *numadimmsize);
 
 #endif
