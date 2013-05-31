@@ -776,13 +776,13 @@ build_hpet(void)
 
 static void
 acpi_build_srat_memory(struct srat_memory_affinity *numamem,
-                       u64 base, u64 len, int node, int enabled)
+                       u64 base, u64 len, int node, int enabled, int hotplug)
 {
     numamem->type = SRAT_MEMORY;
     numamem->length = sizeof(*numamem);
     memset(numamem->proximity, 0 ,4);
     numamem->proximity[0] = node;
-    numamem->flags = cpu_to_le32(!!enabled) | cpu_to_le32(0x2);
+    numamem->flags = cpu_to_le32(!!enabled) | cpu_to_le32(hotplug ? 0x2: 0x0);
     numamem->base_addr_low = base & 0xFFFFFFFF;
     numamem->base_addr_high = base >> 32;
     numamem->length_low = len & 0xFFFFFFFF;
@@ -845,7 +845,7 @@ build_srat(void)
     int slots = 0, node;
     u64 mem_len, mem_base, next_base = 0;
 
-    acpi_build_srat_memory(numamem, 0, 640*1024, 0, 1);
+    acpi_build_srat_memory(numamem, 0, 640*1024, 0, 1, 0);
     next_base = 1024 * 1024;
     numamem++;
     slots++;
@@ -860,7 +860,7 @@ build_srat(void)
         if (mem_base <= RamSize && next_base > RamSize) {
             mem_len -= next_base - RamSize;
             if (mem_len > 0) {
-                acpi_build_srat_memory(numamem, mem_base, mem_len, i-1, 1);
+                acpi_build_srat_memory(numamem, mem_base, mem_len, i-1, 1, 0);
                 numamem++;
                 slots++;
             }
@@ -868,7 +868,7 @@ build_srat(void)
             mem_len = next_base - RamSize;
             next_base += (1ULL << 32) - RamSize;
         }
-        acpi_build_srat_memory(numamem, mem_base, mem_len, i-1, 1);
+        acpi_build_srat_memory(numamem, mem_base, mem_len, i-1, 1, 0);
 
         numamem++;
         slots++;
@@ -891,7 +891,7 @@ build_srat(void)
             mem_base = *hpmemdata++;
             mem_len = *hpmemdata++;
             node = *hpmemdata++;
-            acpi_build_srat_memory(numamem, mem_base, mem_len, node, 1);
+            acpi_build_srat_memory(numamem, mem_base, mem_len, node, 1, 1);
             numamem++;
             slots++;
         }
@@ -899,7 +899,7 @@ build_srat(void)
     }
 
     for (; slots < nb_numa_nodes + nb_hp_memslots + 2; slots++) {
-        acpi_build_srat_memory(numamem, 0, 0, 0, 0);
+        acpi_build_srat_memory(numamem, 0, 0, 0, 0, 0);
         numamem++;
     }
 
