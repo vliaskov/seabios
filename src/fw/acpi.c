@@ -23,6 +23,7 @@
 #include "src/fw/acpi-dsdt.hex"
 
 u32 acpi_pm1a_cnt VARFSEG;
+struct srat_processor_affinity *cpu;
 
 static void
 build_header(struct acpi_table_header *h, u32 sig, int len, u8 rev)
@@ -244,6 +245,7 @@ encodeLen(u8 *ssdt_ptr, int length, int bytes)
 #define PROC_OFFSET_CPUHEX (*ssdt_proc_name - *ssdt_proc_start + 2)
 #define PROC_OFFSET_CPUID1 (*ssdt_proc_name - *ssdt_proc_start + 4)
 #define PROC_OFFSET_CPUID2 (*ssdt_proc_id - *ssdt_proc_start)
+#define PROC_OFFSET_CPUPXM (*ssdt_proc_pxm - *ssdt_proc_start)
 #define PROC_SIZEOF (*ssdt_proc_end - *ssdt_proc_start)
 #define PROC_AML (ssdp_proc_aml + *ssdt_proc_start)
 
@@ -372,6 +374,7 @@ build_ssdt(void)
     *(ssdt_ptr++) = '_';
 
     // build Processor object for each processor
+    struct srat_processor_affinity *core = cpu;
     int i;
     for (i=0; i<acpi_cpus; i++) {
         memcpy(ssdt_ptr, PROC_AML, PROC_SIZEOF);
@@ -379,7 +382,9 @@ build_ssdt(void)
         ssdt_ptr[PROC_OFFSET_CPUHEX+1] = getHex(i);
         ssdt_ptr[PROC_OFFSET_CPUID1] = i;
         ssdt_ptr[PROC_OFFSET_CPUID2] = i;
+        ssdt_ptr[PROC_OFFSET_CPUPXM] = core->proximity_lo;
         ssdt_ptr += PROC_SIZEOF;
+        core++;
     }
 
     // build "Method(NTFY, 2) {If (LEqual(Arg0, 0x00)) {Notify(CP00, Arg1)} ...}"
@@ -497,6 +502,7 @@ build_srat(void)
     int i;
     u64 curnode;
 
+    cpu = core;
     for (i = 0; i < max_cpu; ++i) {
         core->type = SRAT_PROCESSOR;
         core->length = sizeof(*core);
@@ -620,10 +626,10 @@ acpi_setup(void)
 
     struct fadt_descriptor_rev1 *fadt = build_fadt(pci);
     ACPI_INIT_TABLE(fadt);
-    ACPI_INIT_TABLE(build_ssdt());
     ACPI_INIT_TABLE(build_madt());
     ACPI_INIT_TABLE(build_hpet());
     ACPI_INIT_TABLE(build_srat());
+    ACPI_INIT_TABLE(build_ssdt());
     if (pci->device == PCI_DEVICE_ID_INTEL_ICH9_LPC)
         ACPI_INIT_TABLE(build_mcfg_q35());
 
